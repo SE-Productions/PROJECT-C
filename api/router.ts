@@ -7,6 +7,7 @@ import { agentsRouter } from "./agents";
 import { searchRouter } from "./search";
 import { socialRouter } from "./social";
 import { generateRouter } from "./generate";
+import { composioRouter } from "./composio";
 
 export const appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -18,6 +19,7 @@ export const appRouter = createRouter({
   search: searchRouter,
   social: socialRouter,
   generate: generateRouter,
+  composio: composioRouter,
 });
 
 export type AppRouter = typeof appRouter;

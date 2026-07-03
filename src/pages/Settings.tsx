@@ -1,4 +1,3 @@
-import { Button } from "@/components/ui/button";
 import {
   Settings,
   Key,
@@ -7,8 +6,8 @@ import {
   Image,
   Share2,
   CheckCircle2,
-  ExternalLink,
 } from "lucide-react";
+import ComposioDropdown from "@/components/ComposioDropdown";
 
 interface ApiKeyStatus {
   name: string;
@@ -50,15 +49,6 @@ export default function SettingsPage() {
     },
   ];
 
-  const platforms = [
-    { name: "Instagram", connected: false, setupUrl: "https://app.composio.dev/app/instagram" },
-    { name: "TikTok", connected: false, setupUrl: "https://app.composio.dev/app/tiktok" },
-    { name: "Facebook", connected: false, setupUrl: "https://app.composio.dev/app/facebook" },
-    { name: "X (Twitter)", connected: false, setupUrl: "https://app.composio.dev/app/twitter" },
-    { name: "YouTube", connected: false, setupUrl: "https://app.composio.dev/app/youtube" },
-    { name: "Reddit", connected: false, setupUrl: "https://app.composio.dev/app/reddit" },
-  ];
-
   return (
     <div className="p-6 space-y-6 max-w-3xl">
       <div>
@@ -66,6 +56,11 @@ export default function SettingsPage() {
         <p className="text-sm text-neutral-400 mt-1">
           Manage API keys and platform connections
         </p>
+      </div>
+
+      {/* Composio Integration Dropdown */}
+      <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
+        <ComposioDropdown />
       </div>
 
       {/* API Keys */}
@@ -97,38 +92,6 @@ export default function SettingsPage() {
                   <span className="text-xs text-red-400">Not set</span>
                 )}
               </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Social Platforms */}
-      <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <Share2 className="h-5 w-5 text-emerald-500" />
-          <h3 className="font-semibold text-white">Social Media Platforms</h3>
-        </div>
-        <p className="text-xs text-neutral-400 mb-4">
-          Connect your accounts via Composio to enable direct publishing
-        </p>
-        <div className="space-y-2">
-          {platforms.map((platform) => (
-            <div
-              key={platform.name}
-              className="flex items-center gap-4 p-4 rounded-lg bg-neutral-800/50 border border-neutral-800"
-            >
-              <div className="flex-1">
-                <div className="text-sm font-medium text-white">{platform.name}</div>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-neutral-700 text-neutral-300 hover:bg-neutral-800 text-xs"
-                onClick={() => window.open(platform.setupUrl, "_blank")}
-              >
-                <ExternalLink className="h-3 w-3 mr-1" />
-                Connect
-              </Button>
             </div>
           ))}
         </div>
