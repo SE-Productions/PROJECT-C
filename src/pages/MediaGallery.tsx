@@ -23,13 +23,10 @@ import {
   Trash2,
   ExternalLink,
   Sparkles,
+  Play,
 } from "lucide-react";
 import { toast } from "sonner";
-
-const mediaTypes = [
-  { id: "image", label: "Image", icon: Image },
-  { id: "video", label: "Video", icon: Video },
-];
+import { cn } from "@/lib/utils";
 
 export default function MediaGallery() {
   const utils = trpc.useUtils();
@@ -39,6 +36,32 @@ export default function MediaGallery() {
     onSuccess: () => {
       utils.media.list.invalidate();
       toast.success("Media deleted");
+    },
+  });
+
+  const generateImage = trpc.generate.image.useMutation({
+    onSuccess: (data) => {
+      utils.media.list.invalidate();
+      toast.success("Image generated!");
+      setGeneratedUrl(data.url);
+      setGenerating(false);
+    },
+    onError: (err) => {
+      toast.error(err.message ?? "Image generation failed");
+      setGenerating(false);
+    },
+  });
+
+  const generateVideo = trpc.generate.video.useMutation({
+    onSuccess: (data) => {
+      utils.media.list.invalidate();
+      toast.success("Video generated!");
+      setGeneratedUrl(data.thumbnailUrl || data.url);
+      setGenerating(false);
+    },
+    onError: (err) => {
+      toast.error(err.message ?? "Video generation failed");
+      setGenerating(false);
     },
   });
 
@@ -63,57 +86,25 @@ export default function MediaGallery() {
     setGenerating(true);
     setGeneratedUrl(null);
 
-    try {
-      // Use image generation or video generation
-      if (genForm.type === "image") {
-        const response = await fetch("https://ai.api.nvidia.com/v1/genai/stabilityai/stable-diffusion-xl", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${import.meta.env.VITE_NVIDIA_API_KEY ?? ""}`,
-            "Content-Type": "application/json",
-            "NVCF-INPUT-ASSET-REFERENCES": "",
-            "NVCF-FUNCTION-ID": "",
-          },
-          body: JSON.stringify({
-            prompt: genForm.prompt,
-            height: 1024,
-            width: 1024,
-            seed: 0,
-            steps: 30,
-            negative_prompt: "",
-          }),
-        });
-
-        if (response.ok) {
-          const blob = await response.blob();
-          const url = URL.createObjectURL(blob);
-          setGeneratedUrl(url);
-        } else {
-          // Fallback: save with placeholder
-          toast.info("Image generation API configured. In production, this generates the image.");
-          setGeneratedUrl("https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=512&h=512&fit=crop");
-        }
-      } else {
-        // Video generation placeholder
-        toast.info("Video generation is configured with your NVIDIA API key.");
-        setGeneratedUrl("https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=512&h=512&fit=crop");
-      }
-    } catch (error) {
-      toast.error("Generation failed. Check your API key.");
-      setGeneratedUrl("https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=512&h=512&fit=crop");
-    } finally {
-      setGenerating(false);
+    if (genForm.type === "image") {
+      generateImage.mutate({
+        prompt: genForm.prompt,
+        bookId: genForm.bookId ? parseInt(genForm.bookId) : undefined,
+        platform: genForm.platform || undefined,
+      });
+    } else {
+      generateVideo.mutate({
+        prompt: genForm.prompt,
+        bookId: genForm.bookId ? parseInt(genForm.bookId) : undefined,
+        platform: genForm.platform || undefined,
+      });
     }
   };
 
-  const saveGenerated = () => {
-    if (!generatedUrl) return;
-    // In a real app, upload to cloud storage. For now, save the URL.
-    utils.media.list.invalidate();
-    toast.success("Media saved to gallery!");
-    setOpen(false);
-    setGeneratedUrl(null);
+  const resetForm = () => {
     setGenForm({ type: "image", prompt: "", bookId: "", platform: "" });
+    setGeneratedUrl(null);
+    setGenerating(false);
   };
 
   return (
@@ -125,7 +116,7 @@ export default function MediaGallery() {
             AI-generated images and videos for your campaigns
           </p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
           <DialogTrigger asChild>
             <Button className="bg-violet-500 hover:bg-violet-600 text-white font-medium">
               <Plus className="h-4 w-4 mr-2" />
@@ -145,16 +136,20 @@ export default function MediaGallery() {
                 <div>
                   <label className="text-sm text-neutral-400">Type</label>
                   <div className="grid grid-cols-2 gap-2 mt-1">
-                    {mediaTypes.map((t) => (
+                    {[
+                      { id: "image" as const, label: "Image", icon: Image },
+                      { id: "video" as const, label: "Video", icon: Video },
+                    ].map((t) => (
                       <button
                         key={t.id}
                         type="button"
-                        onClick={() => setGenForm({ ...genForm, type: t.id as any })}
-                        className={`flex items-center justify-center gap-2 p-3 rounded-lg border transition-colors ${
+                        onClick={() => setGenForm({ ...genForm, type: t.id })}
+                        className={cn(
+                          "flex items-center justify-center gap-2 p-3 rounded-lg border transition-colors",
                           genForm.type === t.id
                             ? "bg-violet-500/20 border-violet-500/40 text-violet-400"
                             : "bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-neutral-600"
-                        }`}
+                        )}
                       >
                         <t.icon className="h-4 w-4" />
                         {t.label}
@@ -167,7 +162,11 @@ export default function MediaGallery() {
                   <textarea
                     value={genForm.prompt}
                     onChange={(e) => setGenForm({ ...genForm, prompt: e.target.value })}
-                    placeholder="A dramatic book cover illustration of..."
+                    placeholder={
+                      genForm.type === "image"
+                        ? "A dramatic dark fantasy book cover with a dragon silhouette against a blood-red moon..."
+                        : "A cinematic book trailer scene with floating pages and glowing text, dramatic lighting..."
+                    }
                     className="w-full mt-1 bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:ring-1 focus:ring-violet-500 min-h-[80px] resize-none"
                     required
                   />
@@ -194,12 +193,11 @@ export default function MediaGallery() {
                       <SelectValue placeholder="Select platform" />
                     </SelectTrigger>
                     <SelectContent className="bg-neutral-800 border-neutral-700">
-                      <SelectItem value="instagram" className="text-white">Instagram</SelectItem>
-                      <SelectItem value="tiktok" className="text-white">TikTok</SelectItem>
-                      <SelectItem value="facebook" className="text-white">Facebook</SelectItem>
-                      <SelectItem value="x" className="text-white">X</SelectItem>
-                      <SelectItem value="youtube" className="text-white">YouTube</SelectItem>
-                      <SelectItem value="reddit" className="text-white">Reddit</SelectItem>
+                      {["instagram", "tiktok", "facebook", "x", "youtube", "reddit"].map((p) => (
+                        <SelectItem key={p} value={p} className="text-white capitalize">
+                          {p}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -213,7 +211,7 @@ export default function MediaGallery() {
                   ) : (
                     <Sparkles className="h-4 w-4 mr-2" />
                   )}
-                  {generating ? "Generating..." : "Generate"}
+                  {generating ? "Generating..." : `Generate ${genForm.type === "image" ? "Image" : "Video"}`}
                 </Button>
               </form>
             ) : (
@@ -227,17 +225,17 @@ export default function MediaGallery() {
                 </div>
                 <div className="flex gap-2">
                   <Button
-                    onClick={saveGenerated}
+                    onClick={() => { setGeneratedUrl(null); setOpen(false); resetForm(); }}
                     className="flex-1 bg-violet-500 hover:bg-violet-600 text-white"
                   >
-                    Save to Gallery
+                    Done
                   </Button>
                   <Button
                     variant="outline"
                     onClick={() => setGeneratedUrl(null)}
                     className="border-neutral-700 text-neutral-300 hover:bg-neutral-800"
                   >
-                    Regenerate
+                    Generate Another
                   </Button>
                 </div>
               </div>
@@ -252,11 +250,12 @@ export default function MediaGallery() {
           <button
             key={f}
             onClick={() => setFilter(f)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors capitalize ${
+            className={cn(
+              "px-4 py-2 rounded-lg text-sm font-medium transition-colors capitalize",
               filter === f
                 ? "bg-violet-500/15 text-violet-400"
                 : "text-neutral-400 hover:text-white hover:bg-neutral-800"
-            }`}
+            )}
           >
             {f}
           </button>
@@ -283,24 +282,41 @@ export default function MediaGallery() {
               <div className="aspect-square bg-neutral-800 relative">
                 {item.type === "image" ? (
                   <img
-                    src={item.url}
+                    src={item.url || "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"}
                     alt="Media asset"
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Video className="h-12 w-12 text-neutral-600" />
+                  <div className="w-full h-full relative">
+                    {item.thumbnailUrl ? (
+                      <img
+                        src={item.thumbnailUrl}
+                        alt="Video thumbnail"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Video className="h-12 w-12 text-neutral-600" />
+                      </div>
+                    )}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="p-3 rounded-full bg-black/50">
+                        <Play className="h-6 w-6 text-white" />
+                      </div>
+                    </div>
                   </div>
                 )}
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-white hover:text-violet-400"
-                    onClick={() => window.open(item.url, "_blank")}
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                  </Button>
+                  {item.url && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-white hover:text-violet-400"
+                      onClick={() => window.open(item.url, "_blank")}
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="icon"
@@ -321,13 +337,14 @@ export default function MediaGallery() {
                     {item.type}
                   </span>
                   <span
-                    className={`text-xs px-2 py-0.5 rounded-full ${
+                    className={cn(
+                      "text-xs px-2 py-0.5 rounded-full",
                       item.status === "ready"
                         ? "bg-emerald-500/10 text-emerald-400"
                         : item.status === "generating"
                         ? "bg-amber-500/10 text-amber-400"
                         : "bg-red-500/10 text-red-400"
-                    }`}
+                    )}
                   >
                     {item.status}
                   </span>
@@ -336,7 +353,7 @@ export default function MediaGallery() {
                   <p className="text-xs text-neutral-500 mt-1 line-clamp-2">{item.prompt}</p>
                 )}
                 {item.platform && (
-                  <span className="text-xs text-violet-400 mt-1 block">{item.platform}</span>
+                  <span className="text-xs text-violet-400 mt-1 block capitalize">{item.platform}</span>
                 )}
               </div>
             </div>

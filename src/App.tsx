@@ -6,6 +6,7 @@ import Campaigns from "./pages/Campaigns";
 import AgentHub from "./pages/AgentHub";
 import MediaGallery from "./pages/MediaGallery";
 import PostScheduler from "./pages/PostScheduler";
+import Learn from "./pages/Learn";
 import Settings from "./pages/Settings";
 
 export default function App() {
@@ -18,6 +19,7 @@ export default function App() {
         <Route path="/agents" element={<AgentHub />} />
         <Route path="/media" element={<MediaGallery />} />
         <Route path="/posts" element={<PostScheduler />} />
+        <Route path="/learn" element={<Learn />} />
         <Route path="/settings" element={<Settings />} />
       </Route>
     </Routes>
