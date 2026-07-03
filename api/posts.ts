@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { posts } from "@db/schema";
-import { eq, and, gte } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 export const postsRouter = createRouter({
   list: publicQuery.query(async () => {

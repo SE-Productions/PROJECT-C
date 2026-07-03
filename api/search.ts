@@ -24,7 +24,7 @@ export const searchRouter = createRouter({
           throw new Error(`Firecrawl error: ${response.status}`);
         }
 
-        const data = await response.json();
+        const data = await response.json() as any;
         return {
           results: data.data?.map((r: any) => ({
             title: r.title ?? "",
@@ -62,7 +62,7 @@ export const searchRouter = createRouter({
           throw new Error(`Firecrawl error: ${response.status}`);
         }
 
-        const data = await response.json();
+        const data = await response.json() as any;
         return {
           content: data.data?.markdown ?? "",
           title: data.data?.metadata?.title ?? "",

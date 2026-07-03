@@ -10,7 +10,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Bot,
   Send,
   Loader2,
   BrainCircuit,

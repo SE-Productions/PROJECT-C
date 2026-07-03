@@ -1,6 +1,4 @@
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Settings,
   Key,
@@ -9,10 +7,8 @@ import {
   Image,
   Share2,
   CheckCircle2,
-  Loader2,
   ExternalLink,
 } from "lucide-react";
-import { toast } from "sonner";
 
 interface ApiKeyStatus {
   name: string;
@@ -23,8 +19,6 @@ interface ApiKeyStatus {
 }
 
 export default function SettingsPage() {
-  const [testing, setTesting] = useState<string | null>(null);
-
   const apiKeys: ApiKeyStatus[] = [
     {
       name: "Composio",

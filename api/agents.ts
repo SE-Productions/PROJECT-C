@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { agentTasks, agentMessages, books, campaigns } from "@db/schema";
+import { agentTasks, agentMessages, books } from "@db/schema";
 import { eq, desc } from "drizzle-orm";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -34,7 +34,7 @@ async function callGemini(systemPrompt: string, userMessage: string): Promise<st
       return generateFallbackResponse(userMessage);
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (text) return text;
     return generateFallbackResponse(userMessage);
@@ -76,7 +76,7 @@ export const agentsRouter = createRouter({
       bookId: z.number().optional(),
       campaignId: z.number().optional(),
       task: z.string(),
-      input: z.record(z.any()).optional(),
+      input: z.record(z.string(), z.any()).optional(),
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
@@ -126,7 +126,7 @@ export const agentsRouter = createRouter({
       agentType: z.enum(["planner", "search", "media", "social"]),
       bookId: z.number().optional(),
       message: z.string(),
-      metadata: z.record(z.any()).optional(),
+      metadata: z.record(z.string(), z.any()).optional(),
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
