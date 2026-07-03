@@ -8,6 +8,7 @@ import { searchRouter } from "./search";
 import { socialRouter } from "./social";
 import { generateRouter } from "./generate";
 import { composioRouter } from "./composio";
+import { runtimeRouter } from "./runtime";
 
 export const appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -20,6 +21,7 @@ export const appRouter = createRouter({
   social: socialRouter,
   generate: generateRouter,
   composio: composioRouter,
+  runtime: runtimeRouter,
 });
 
 export type AppRouter = typeof appRouter;
