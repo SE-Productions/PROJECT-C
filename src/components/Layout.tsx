@@ -13,6 +13,7 @@ import {
   Menu,
   X,
   GraduationCap,
+  Wand2,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -20,6 +21,7 @@ import { Toaster } from "sonner";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
+  { to: "/chat", icon: Wand2, label: "Smart Chat" },
   { to: "/books", icon: BookOpen, label: "Books" },
   { to: "/campaigns", icon: Megaphone, label: "Campaigns" },
   { to: "/agents", icon: Bot, label: "Agent Hub" },

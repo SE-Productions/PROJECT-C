@@ -8,12 +8,14 @@ import MediaGallery from "./pages/MediaGallery";
 import PostScheduler from "./pages/PostScheduler";
 import Learn from "./pages/Learn";
 import Settings from "./pages/Settings";
+import SmartChat from "./pages/SmartChat";
 
 export default function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/chat" element={<SmartChat />} />
         <Route path="/books" element={<Books />} />
         <Route path="/campaigns" element={<Campaigns />} />
         <Route path="/agents" element={<AgentHub />} />

@@ -10,6 +10,8 @@ import { generateRouter } from "./generate";
 import { composioRouter } from "./composio";
 import { runtimeRouter } from "./runtime";
 import { crewRouter } from "./crew";
+import { cronRouter } from "./cron";
+import { smartChatRouter } from "./smart-chat";
 
 export const appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -24,6 +26,8 @@ export const appRouter = createRouter({
   composio: composioRouter,
   runtime: runtimeRouter,
   crew: crewRouter,
+  cron: cronRouter,
+  smart: smartChatRouter,
 });
 
 export type AppRouter = typeof appRouter;
