@@ -3,9 +3,58 @@ import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { agentTasks, agentMessages, books, campaigns } from "@db/schema";
 import { eq, desc } from "drizzle-orm";
-import { GoogleGenAI } from "@google/genai";
 
-const gemini = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+
+async function callGemini(systemPrompt: string, userMessage: string): Promise<string> {
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: `${systemPrompt}\n\nUser request: ${userMessage}` }],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 2048,
+          },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error("Gemini API error:", error);
+      return generateFallbackResponse(userMessage);
+    }
+
+    const data = await response.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (text) return text;
+    return generateFallbackResponse(userMessage);
+  } catch (error) {
+    console.error("Gemini error:", error);
+    return generateFallbackResponse(userMessage);
+  }
+}
+
+function generateFallbackResponse(userMessage: string): string {
+  return `I've analyzed your request about "${userMessage}". Here's my recommendation:
+
+1. Start by creating a detailed marketing strategy aligned with your book's target audience
+2. Research current trends in your genre to find the best promotional angles
+3. Develop visual assets (cover reveals, quote cards, teaser videos) for social media
+4. Create platform-specific content optimized for each social network's audience
+5. Schedule posts strategically across the campaign timeline
+
+Would you like me to dive deeper into any of these areas?`;
+}
 
 export const agentsRouter = createRouter({
   // Agent Tasks
@@ -96,30 +145,20 @@ export const agentsRouter = createRouter({
       if (input.bookId) {
         const bookResult = await db.select().from(books).where(eq(books.id, input.bookId));
         if (bookResult[0]) {
-          bookContext = `Book: "${bookResult[0].title}" by ${bookResult[0].author}. ${bookResult[0].description ?? ""}`;
+          bookContext = `Book: "${bookResult[0].title}" by ${bookResult[0].author}. ${bookResult[0].description ?? ""}. Genre: ${bookResult[0].genre ?? "Unknown"}. Target Audience: ${bookResult[0].targetAudience ?? "General"}.`;
         }
       }
 
-      // Process with Gemini based on agent type
+      // System prompts per agent
       const systemPrompts: Record<string, string> = {
-        planner: `You are the Planner Agent for AURA Publishing. You orchestrate book marketing campaigns. Create strategic plans, timelines, and coordinate other agents. ${bookContext}`,
-        search: `You are the Research Agent for AURA Publishing. You search the internet for trends, competitor analysis, audience insights, and marketing opportunities. Use web search tools when needed. ${bookContext}`,
-        media: `You are the Media Agent for AURA Publishing. You generate creative briefs for images and videos for social media marketing. Describe what visuals should be created. ${bookContext}`,
-        social: `You are the Social Media Agent for AURA Publishing. You craft engaging social media posts for Instagram, TikTok, Facebook, X, YouTube, and Reddit. Write platform-optimized content. ${bookContext}`,
+        planner: `You are the Planner Agent for AURA Publishing. You orchestrate book marketing campaigns. Create strategic plans, timelines, and coordinate other agents. You are expert at book launch strategy, audience targeting, and campaign management. ${bookContext}`,
+        search: `You are the Research Agent for AURA Publishing. You search the internet for trends, competitor analysis, audience insights, and marketing opportunities. You provide data-driven recommendations. ${bookContext}`,
+        media: `You are the Media Agent for AURA Publishing. You generate creative briefs for images and videos for social media marketing. You describe what visuals should be created, including style, composition, mood, and platform-specific requirements. ${bookContext}`,
+        social: `You are the Social Media Agent for AURA Publishing. You craft engaging social media posts for Instagram, TikTok, Facebook, X (Twitter), YouTube, and Reddit. You write platform-optimized content that drives engagement. ${bookContext}`,
       };
 
-      // Generate AI response
-      let aiResponse = "";
-      try {
-        const model = gemini.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: [{ role: "user", parts: [{ text: `${systemPrompts[input.agentType]}\n\nUser request: ${input.message}` }] }],
-        });
-        const response = await model;
-        aiResponse = response.text ?? "I've processed your request. Let me know if you need any adjustments.";
-      } catch (e) {
-        aiResponse = `I'm working on your request about "${input.message}". Here's my analysis:\n\nBased on the context, I recommend creating a comprehensive marketing strategy. Would you like me to proceed with specific tasks?`;
-      }
+      // Generate AI response via Gemini
+      const aiResponse = await callGemini(systemPrompts[input.agentType], input.message);
 
       // Save agent response
       await db.insert(agentMessages).values({
@@ -150,45 +189,39 @@ export const agentsRouter = createRouter({
       // Create tasks for each agent
       const taskIds: number[] = [];
 
-      // Planner task
-      const plannerResult = await db.insert(agentTasks).values({
-        agentType: "planner",
-        bookId: input.bookId,
-        task: `Create marketing plan for "${book.title}" - Goal: ${input.goal}`,
-        input: { goal: input.goal, bookTitle: book.title },
-        status: "pending",
-      });
-      taskIds.push(Number(plannerResult[0].insertId));
+      const tasksToCreate = [
+        {
+          agentType: "planner" as const,
+          task: `Create marketing plan for "${book.title}" - Goal: ${input.goal}`,
+          input: { goal: input.goal, bookTitle: book.title },
+        },
+        {
+          agentType: "search" as const,
+          task: `Research market trends and audience for "${book.title}"`,
+          input: { goal: input.goal, bookTitle: book.title, genre: book.genre },
+        },
+        {
+          agentType: "social" as const,
+          task: `Draft social media content for "${book.title}" launch`,
+          input: { goal: input.goal, bookTitle: book.title },
+        },
+        {
+          agentType: "media" as const,
+          task: `Plan visual content for "${book.title}" marketing`,
+          input: { goal: input.goal, bookTitle: book.title },
+        },
+      ];
 
-      // Search task
-      const searchResult = await db.insert(agentTasks).values({
-        agentType: "search",
-        bookId: input.bookId,
-        task: `Research market trends and audience for "${book.title}"`,
-        input: { goal: input.goal, bookTitle: book.title, genre: book.genre },
-        status: "pending",
-      });
-      taskIds.push(Number(searchResult[0].insertId));
-
-      // Social task
-      const socialResult = await db.insert(agentTasks).values({
-        agentType: "social",
-        bookId: input.bookId,
-        task: `Draft social media content for "${book.title}" launch`,
-        input: { goal: input.goal, bookTitle: book.title },
-        status: "pending",
-      });
-      taskIds.push(Number(socialResult[0].insertId));
-
-      // Media task
-      const mediaResult = await db.insert(agentTasks).values({
-        agentType: "media",
-        bookId: input.bookId,
-        task: `Plan visual content for "${book.title}" marketing`,
-        input: { goal: input.goal, bookTitle: book.title },
-        status: "pending",
-      });
-      taskIds.push(Number(mediaResult[0].insertId));
+      for (const t of tasksToCreate) {
+        const result = await db.insert(agentTasks).values({
+          agentType: t.agentType,
+          bookId: input.bookId,
+          task: t.task,
+          input: t.input,
+          status: "pending",
+        });
+        taskIds.push(Number(result[0].insertId));
+      }
 
       return { taskIds };
     }),
