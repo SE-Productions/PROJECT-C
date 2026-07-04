@@ -3,8 +3,7 @@ import { getPersona } from "./agents";
 import { getToolsForAgent, TOOL_REGISTRY } from "./tools";
 import { getDb } from "../queries/connection";
 import { agentMessages } from "@db/schema";
-
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+import { callGemini } from "../lib/gemini";
 
 interface ModelResponse {
   text: string;
@@ -34,19 +33,10 @@ function buildPrompt(ctx: AgentContext): string {
 }
 
 async function callModel(prompt: string, temperature: number): Promise<ModelResponse> {
-  const resp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { temperature, maxOutputTokens: 4096 },
-      }),
-    }
-  );
-  if (!resp.ok) throw new Error(`Gemini: ${resp.status}`);
-  const data = (await resp.json()) as any;
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "No response.";
+  const text = await callGemini(prompt, { temperature, maxTokens: 4096 });
+  if (!text) {
+    return { text: "The AI service is currently rate-limited. Please try again in a moment.", toolCalls: [] };
+  }
   const { cleanText, toolCalls } = parseToolCalls(text);
   return { text: cleanText, toolCalls };
 }

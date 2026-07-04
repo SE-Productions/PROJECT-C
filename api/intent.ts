@@ -1,7 +1,6 @@
 // Intent Parser — Natural Language → Structured Command
 // Uses Gemini to parse user text into actionable commands
-
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+import { callGemini } from "./lib/gemini";
 
 export interface ParsedIntent {
   action: string;
@@ -47,22 +46,8 @@ Respond ONLY with valid JSON:
   "needsConfirmation": true|false
 }`;
 
-  const resp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
-      }),
-    }
-  );
-
-  if (!resp.ok) throw new Error(`Intent parser: ${resp.status}`);
-
-  const data = (await resp.json()) as any;
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+  const text = await callGemini(prompt, { temperature: 0.1, maxTokens: 1024 });
+  if (!text) return fallbackIntent(userText);
 
   // Extract JSON
   const jsonMatch = text.match(/\{[\s\S]*\}/);

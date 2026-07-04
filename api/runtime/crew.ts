@@ -3,8 +3,7 @@
 import { getDb } from "../queries/connection";
 import { agentTasks, agentMessages } from "@db/schema";
 import { eq } from "drizzle-orm";
-
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+import { callGemini } from "../lib/gemini";
 
 interface CrewTask {
   id: number;
@@ -45,21 +44,8 @@ Respond ONLY with a JSON array like:
 
 Create 3-6 tasks. Tasks should be specific and actionable. Consider dependencies (research before creation, creation before publishing).`;
 
-  const resp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.3, maxOutputTokens: 2048 },
-      }),
-    }
-  );
-
-  if (!resp.ok) throw new Error(`Gemini: ${resp.status}`);
-  const data = (await resp.json()) as any;
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
+  const text = await callGemini(prompt, { temperature: 0.3, maxTokens: 2048 });
+  if (!text) return [{ description: goal, assignedAgent: "planner" }];
 
   // Extract JSON from response
   const jsonMatch = text.match(/\[[\s\S]*\]/);
@@ -182,20 +168,8 @@ ${tasks.map((t) => `Task ${t.id} (${t.assignedAgent}): ${t.status}\n${t.output ?
 
 Provide a concise final report with key outcomes and next steps.`;
 
-  const resp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: reportPrompt }] }],
-        generationConfig: { temperature: 0.5, maxOutputTokens: 2048 },
-      }),
-    }
-  );
-
-  const data = (await resp.json()) as any;
-  const finalReport = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "Crew execution complete.";
+  const finalReport = await callGemini(reportPrompt, { temperature: 0.5, maxTokens: 2048 })
+    ?? "Crew execution complete.";
 
   return {
     crewId: Date.now(),

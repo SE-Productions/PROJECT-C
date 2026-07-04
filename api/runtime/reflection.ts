@@ -2,8 +2,7 @@
 // E = R[(G + C + K + T + M) → O → P → A → V → Δ → F]
 import { getDb } from "../queries/connection";
 import { reflectionLog } from "@db/schema";
-
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+import { callGemini } from "../lib/gemini";
 
 interface ReflectionInput {
   agentType: string;
@@ -16,7 +15,7 @@ interface ReflectionInput {
 
 interface ReflectionResult {
   aligned: "yes" | "no" | "partial";
-  score: number; // 0-1
+  score: number;
   analysis: string;
   correction?: string;
   shouldContinue: boolean;
@@ -24,12 +23,7 @@ interface ReflectionResult {
 
 /**
  * Reflect on a decision before executing it.
- * Asks: "Does this decision serve the user's goal?"
- *
- * Formula: V = verify(decision, goal, context)
- * IF V = TRUE → continue
- * IF V = FALSE → correct + repeat
- * IF UNKNOWN → observe more
+ * Retry-aware: uses resilient Gemini client with 429 backoff.
  */
 export async function reflectOnDecision(input: ReflectionInput): Promise<ReflectionResult> {
   const prompt = `You are a strict self-reflection system for an AI agent. Your job is to audit decisions.
@@ -57,29 +51,12 @@ Respond ONLY with valid JSON:
   "shouldContinue": true|false
 }`;
 
+  const text = await callGemini(prompt, { temperature: 0.1, maxTokens: 1024 });
+  if (!text) return fallbackReflection(input);
+
   try {
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
-        }),
-      }
-    );
-
-    if (!resp.ok) {
-      return fallbackReflection(input);
-    }
-
-    const data = (await resp.json()) as any;
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return fallbackReflection(input);
-
     const parsed = JSON.parse(jsonMatch[0]);
 
     const result: ReflectionResult = {
@@ -90,9 +67,7 @@ Respond ONLY with valid JSON:
       shouldContinue: parsed.aligned === "yes" || parsed.shouldContinue === true,
     };
 
-    // Persist the reflection
     await persistReflection(input, result);
-
     return result;
   } catch {
     return fallbackReflection(input);
@@ -118,26 +93,12 @@ Result: "${result}"
 Did the result satisfy the user's goal? Is the output complete and accurate?
 Respond with JSON: {"aligned": "yes|no|partial", "feedback": "explanation"}`;
 
+  const text = await callGemini(prompt, { temperature: 0.1, maxTokens: 512 });
+  if (!text) return { aligned: "partial", feedback: "Reflection service unavailable (rate limited or circuit open)." };
+
   try {
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 512 },
-        }),
-      }
-    );
-
-    if (!resp.ok) return { aligned: "partial", feedback: "Reflection service unavailable." };
-
-    const data = (await resp.json()) as any;
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return { aligned: "partial", feedback: "Parse error." };
-
     const parsed = JSON.parse(jsonMatch[0]);
     return {
       aligned: ["yes", "no", "partial"].includes(parsed.aligned) ? parsed.aligned : "partial",
@@ -149,23 +110,26 @@ Respond with JSON: {"aligned": "yes|no|partial", "feedback": "explanation"}`;
 }
 
 async function persistReflection(input: ReflectionInput, result: ReflectionResult) {
-  const db = getDb();
-  await db.insert(reflectionLog).values({
-    agentType: input.agentType as any,
-    taskId: input.taskId,
-    originalDecision: input.originalDecision,
-    reflectionResult: result.analysis,
-    alignedWithGoal: result.aligned,
-    correction: result.correction ?? null,
-  });
+  try {
+    const db = getDb();
+    await db.insert(reflectionLog).values({
+      agentType: input.agentType as any,
+      taskId: input.taskId,
+      originalDecision: input.originalDecision,
+      reflectionResult: result.analysis,
+      alignedWithGoal: result.aligned,
+      correction: result.correction ?? null,
+    });
+  } catch (e: any) {
+    console.warn("[Reflection] Failed to persist:", e.message);
+  }
 }
 
 function fallbackReflection(_input: ReflectionInput): ReflectionResult {
-  // Conservative fallback — allow to continue but flag for review
   return {
     aligned: "partial",
     score: 0.5,
-    analysis: "Reflection engine unavailable. Proceeding with caution.",
+    analysis: "Reflection engine unavailable (rate limited or circuit open). Proceeding with caution.",
     shouldContinue: true,
   };
 }

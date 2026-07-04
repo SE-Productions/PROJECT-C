@@ -3,45 +3,13 @@ import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { agentTasks, agentMessages, books } from "@db/schema";
 import { eq, desc } from "drizzle-orm";
+import { callGemini } from "./lib/gemini";
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-
-async function callGemini(systemPrompt: string, userMessage: string): Promise<string> {
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: "user",
-              parts: [{ text: `${systemPrompt}\n\nUser request: ${userMessage}` }],
-            },
-          ],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 2048,
-          },
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      const error = await response.text();
-      console.error("Gemini API error:", error);
-      return generateFallbackResponse(userMessage);
-    }
-
-    const data = await response.json() as any;
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (text) return text;
-    return generateFallbackResponse(userMessage);
-  } catch (error) {
-    console.error("Gemini error:", error);
-    return generateFallbackResponse(userMessage);
-  }
+async function generateResponse(systemPrompt: string, userMessage: string): Promise<string> {
+  const prompt = `${systemPrompt}\n\nUser request: ${userMessage}`;
+  const text = await callGemini(prompt, { temperature: 0.7, maxTokens: 2048 });
+  if (text) return text;
+  return generateFallbackResponse(userMessage);
 }
 
 function generateFallbackResponse(userMessage: string): string {
@@ -157,8 +125,8 @@ export const agentsRouter = createRouter({
         social: `You are the Social Media Agent for AURA Publishing. You craft engaging social media posts for Instagram, TikTok, Facebook, X (Twitter), YouTube, and Reddit. You write platform-optimized content that drives engagement. ${bookContext}`,
       };
 
-      // Generate AI response via Gemini
-      const aiResponse = await callGemini(systemPrompts[input.agentType], input.message);
+      // Generate AI response via Gemini (resilient client)
+      const aiResponse = await generateResponse(systemPrompts[input.agentType], input.message);
 
       // Save agent response
       await db.insert(agentMessages).values({
