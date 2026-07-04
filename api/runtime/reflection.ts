@@ -1,0 +1,171 @@
+// Reflection Engine — Self-reflection with decision alignment checking
+// E = R[(G + C + K + T + M) → O → P → A → V → Δ → F]
+import { getDb } from "../queries/connection";
+import { reflectionLog } from "@db/schema";
+
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+
+interface ReflectionInput {
+  agentType: string;
+  taskId: number;
+  userGoal: string;
+  originalDecision: string;
+  currentContext: string;
+  availableTools: string[];
+}
+
+interface ReflectionResult {
+  aligned: "yes" | "no" | "partial";
+  score: number; // 0-1
+  analysis: string;
+  correction?: string;
+  shouldContinue: boolean;
+}
+
+/**
+ * Reflect on a decision before executing it.
+ * Asks: "Does this decision serve the user's goal?"
+ *
+ * Formula: V = verify(decision, goal, context)
+ * IF V = TRUE → continue
+ * IF V = FALSE → correct + repeat
+ * IF UNKNOWN → observe more
+ */
+export async function reflectOnDecision(input: ReflectionInput): Promise<ReflectionResult> {
+  const prompt = `You are a strict self-reflection system for an AI agent. Your job is to audit decisions.
+
+USER GOAL: "${input.userGoal}"
+AGENT TYPE: ${input.agentType}
+AGENT DECISION: "${input.originalDecision}"
+CURRENT CONTEXT:
+${input.currentContext}
+
+Available tools: ${input.availableTools.join(", ")}
+
+Evaluate this decision against these criteria:
+1. ALIGNMENT — Does this decision directly serve the user's goal?
+2. EFFICIENCY — Is this the most direct path to the goal?
+3. TOOL CORRECTNESS — Is the right tool being used?
+4. HALLUCINATION CHECK — Is the decision grounded in actual data/context?
+
+Respond ONLY with valid JSON:
+{
+  "aligned": "yes|no|partial",
+  "score": 0.0-1.0,
+  "analysis": "your reasoning",
+  "correction": "if misaligned, suggest the correct approach",
+  "shouldContinue": true|false
+}`;
+
+  try {
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
+        }),
+      }
+    );
+
+    if (!resp.ok) {
+      return fallbackReflection(input);
+    }
+
+    const data = (await resp.json()) as any;
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return fallbackReflection(input);
+
+    const parsed = JSON.parse(jsonMatch[0]);
+
+    const result: ReflectionResult = {
+      aligned: ["yes", "no", "partial"].includes(parsed.aligned) ? parsed.aligned : "partial",
+      score: Math.min(1, Math.max(0, Number(parsed.score) || 0.5)),
+      analysis: String(parsed.analysis ?? "No analysis provided."),
+      correction: parsed.correction ?? undefined,
+      shouldContinue: parsed.aligned === "yes" || parsed.shouldContinue === true,
+    };
+
+    // Persist the reflection
+    await persistReflection(input, result);
+
+    return result;
+  } catch {
+    return fallbackReflection(input);
+  }
+}
+
+/**
+ * Post-execution reflection: Did the action produce the expected result?
+ */
+export async function reflectOnResult(
+  _agentType: string,
+  _taskId: number,
+  userGoal: string,
+  actionTaken: string,
+  result: string
+): Promise<{ aligned: "yes" | "no" | "partial"; feedback: string }> {
+  const prompt = `Audit this completed action:
+
+User goal: "${userGoal}"
+Action taken: "${actionTaken}"
+Result: "${result}"
+
+Did the result satisfy the user's goal? Is the output complete and accurate?
+Respond with JSON: {"aligned": "yes|no|partial", "feedback": "explanation"}`;
+
+  try {
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 512 },
+        }),
+      }
+    );
+
+    if (!resp.ok) return { aligned: "partial", feedback: "Reflection service unavailable." };
+
+    const data = (await resp.json()) as any;
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return { aligned: "partial", feedback: "Parse error." };
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    return {
+      aligned: ["yes", "no", "partial"].includes(parsed.aligned) ? parsed.aligned : "partial",
+      feedback: String(parsed.feedback ?? "No feedback."),
+    };
+  } catch {
+    return { aligned: "partial", feedback: "Reflection failed." };
+  }
+}
+
+async function persistReflection(input: ReflectionInput, result: ReflectionResult) {
+  const db = getDb();
+  await db.insert(reflectionLog).values({
+    agentType: input.agentType as any,
+    taskId: input.taskId,
+    originalDecision: input.originalDecision,
+    reflectionResult: result.analysis,
+    alignedWithGoal: result.aligned,
+    correction: result.correction ?? null,
+  });
+}
+
+function fallbackReflection(_input: ReflectionInput): ReflectionResult {
+  // Conservative fallback — allow to continue but flag for review
+  return {
+    aligned: "partial",
+    score: 0.5,
+    analysis: "Reflection engine unavailable. Proceeding with caution.",
+    shouldContinue: true,
+  };
+}

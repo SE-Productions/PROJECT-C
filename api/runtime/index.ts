@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { createRouter, publicQuery } from "../middleware";
-import { runAgentLoop } from "./agent-loop";
+import { runHardenedAgentLoop } from "./hardened-loop";
 import { TOOL_REGISTRY } from "./tools";
 import { AGENT_PERSONAS } from "./agents";
 import { getDb } from "../queries/connection";
@@ -56,7 +56,9 @@ export const runtimeRouter = createRouter({
           campaignId: input.campaignId, userMessage: input.message,
           memory, iteration: 0,
         };
-        const result = await runAgentLoop(ctx);
+        // Use hardened loop with self-reflection and RAG memory
+        const userGoal = `Execute ${input.agentType} task: ${input.message}`;
+        const result = await runHardenedAgentLoop(ctx, taskId, userGoal);
 
         await db.update(agentTasks).set({
           status: "completed", output: result.finalResponse, completedAt: new Date(),
@@ -68,6 +70,7 @@ export const runtimeRouter = createRouter({
           toolCalls: result.toolCalls.map((tc) => ({
             tool: tc.tool, success: tc.result.success, output: tc.result.output,
           })),
+          reflectionEnabled: true,
         };
       } catch (error: any) {
         await db.update(agentTasks).set({

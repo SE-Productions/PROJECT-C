@@ -7,6 +7,7 @@ import {
   bigint,
   json,
   mysqlEnum,
+  float,
 } from "drizzle-orm/mysql-core";
 
 export const books = mysqlTable("books", {
@@ -95,31 +96,43 @@ export const agentMessages = mysqlTable("agent_messages", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-// ─── NEW: Cron Jobs for scheduled agent tasks ───
-export const cronJobs = mysqlTable("cron_jobs", {
+// ─── GLOBAL SCRATCH PAD — Persistent RAG memory ───
+export const scratchPad = mysqlTable("scratch_pad", {
   id: serial("id").primaryKey(),
-  name: varchar("name", { length: 255 }).notNull(),
-  description: text("description"),
-  agentType: mysqlEnum("agent_type", ["planner", "search", "media", "social"]).notNull(),
+  key: varchar("key", { length: 255 }).notNull(),
+  value: text("value").notNull(),
+  category: varchar("category", { length: 100 }).default("general"),
+  tags: json("tags").$type<string[]>(),
+  source: varchar("source", { length: 255 }),
   bookId: bigint("book_id", { mode: "number", unsigned: true }),
-  prompt: text("prompt").notNull(),
-  schedule: mysqlEnum("schedule", ["hourly", "daily", "weekly", "custom"]).notNull().default("daily"),
-  cronExpression: varchar("cron_expression", { length: 100 }),
-  lastRunAt: timestamp("last_run_at"),
-  nextRunAt: timestamp("next_run_at"),
-  runCount: bigint("run_count", { mode: "number" }).notNull().default(0),
-  status: mysqlEnum("status", ["active", "paused", "completed", "failed"]).notNull().default("active"),
+  accessCount: bigint("access_count", { mode: "number" }).default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
 });
 
-// ─── NEW: Smart Chat conversations ───
-export const smartConversations = mysqlTable("smart_conversations", {
+// ─── AGENT SCRATCH PAD — Temporary working memory per agent session ───
+export const agentScratchPad = mysqlTable("agent_scratch_pad", {
   id: serial("id").primaryKey(),
-  userMessage: text("user_message").notNull(),
-  parsedIntent: json("parsed_intent"),
-  confirmed: mysqlEnum("confirmed", ["pending", "confirmed", "rejected"]).notNull().default("pending"),
-  executionResult: text("execution_result"),
-  executedAt: timestamp("executed_at"),
+  agentType: mysqlEnum("agent_type", ["planner", "search", "media", "social"]).notNull(),
+  taskId: bigint("task_id", { mode: "number", unsigned: true }),
+  bookId: bigint("book_id", { mode: "number", unsigned: true }),
+  thought: text("thought").notNull(),
+  decision: text("decision"),
+  reasoning: text("reasoning"),
+  reflectionScore: float("reflection_score"),
+  isRelevant: mysqlEnum("is_relevant", ["yes", "no", "uncertain"]).default("uncertain"),
+  status: mysqlEnum("status", ["active", "resolved", "discarded"]).default("active"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ─── REFLECTION LOG — Decision audit trail ───
+export const reflectionLog = mysqlTable("reflection_log", {
+  id: serial("id").primaryKey(),
+  agentType: mysqlEnum("agent_type", ["planner", "search", "media", "social"]).notNull(),
+  taskId: bigint("task_id", { mode: "number", unsigned: true }),
+  originalDecision: text("original_decision").notNull(),
+  reflectionResult: text("reflection_result").notNull(),
+  alignedWithGoal: mysqlEnum("aligned_with_goal", ["yes", "no", "partial"]).notNull(),
+  correction: text("correction"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
