@@ -1,6 +1,6 @@
 // Intent Parser — Natural Language → Structured Command
 // Uses Gemini to parse user text into actionable commands
-import { callGemini } from "./lib/gemini";
+import { routeGeneral } from "./lib/model-router";
 
 export interface ParsedIntent {
   action: string;
@@ -46,8 +46,9 @@ Respond ONLY with valid JSON:
   "needsConfirmation": true|false
 }`;
 
-  const text = await callGemini(prompt, { temperature: 0.1, maxTokens: 1024 });
-  if (!text) return fallbackIntent(userText);
+  const routed = await routeGeneral(prompt, { temperature: 0.1, maxTokens: 1024 });
+  if (!routed) return fallbackIntent(userText);
+  const text = routed.text;
 
   // Extract JSON
   const jsonMatch = text.match(/\{[\s\S]*\}/);

@@ -3,7 +3,7 @@ import { getPersona } from "./agents";
 import { getToolsForAgent, TOOL_REGISTRY } from "./tools";
 import { getDb } from "../queries/connection";
 import { agentMessages } from "@db/schema";
-import { callGemini } from "../lib/gemini";
+import { routePrompt } from "../lib/model-router";
 
 interface ModelResponse {
   text: string;
@@ -32,12 +32,12 @@ function buildPrompt(ctx: AgentContext): string {
   return `${persona.systemPrompt}\n\n## Available Tools\n<tool name="tool_name">{"param": "value"}</tool>\n\n${toolDescriptions}\n\n## Memory\n${memoryContext}\n\n## Request\n${ctx.userMessage}\n\nRespond naturally. Use tools when needed. Provide final summary when done.`;
 }
 
-async function callModel(prompt: string, temperature: number): Promise<ModelResponse> {
-  const text = await callGemini(prompt, { temperature, maxTokens: 4096 });
-  if (!text) {
-    return { text: "The AI service is currently rate-limited. Please try again in a moment.", toolCalls: [] };
+async function callModel(agentType: string, prompt: string, temperature: number): Promise<ModelResponse> {
+  const result = await routePrompt(agentType, prompt, { temperature, maxTokens: 4096 });
+  if (!result) {
+    return { text: "All AI models are currently unavailable. Please try again in a moment.", toolCalls: [] };
   }
-  const { cleanText, toolCalls } = parseToolCalls(text);
+  const { cleanText, toolCalls } = parseToolCalls(result.text);
   return { text: cleanText, toolCalls };
 }
 
@@ -66,7 +66,7 @@ export async function runAgentLoop(ctx: AgentContext): Promise<AgentLoopResult> 
   for (let iteration = 0; iteration < persona.maxIterations; iteration++) {
     ctx.iteration = iteration;
     const prompt = buildPrompt(ctx);
-    const modelResp = await callModel(prompt, persona.temperature);
+    const modelResp = await callModel(ctx.agentType, prompt, persona.temperature);
 
     if (modelResp.toolCalls.length === 0) {
       finalResponse = modelResp.text;

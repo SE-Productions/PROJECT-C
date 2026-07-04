@@ -3,12 +3,12 @@ import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { agentTasks, agentMessages, books } from "@db/schema";
 import { eq, desc } from "drizzle-orm";
-import { callGemini } from "./lib/gemini";
+import { routePrompt } from "./lib/model-router";
 
-async function generateResponse(systemPrompt: string, userMessage: string): Promise<string> {
+async function generateResponse(agentType: string, systemPrompt: string, userMessage: string): Promise<string> {
   const prompt = `${systemPrompt}\n\nUser request: ${userMessage}`;
-  const text = await callGemini(prompt, { temperature: 0.7, maxTokens: 2048 });
-  if (text) return text;
+  const result = await routePrompt(agentType, prompt, { temperature: 0.7, maxTokens: 2048 });
+  if (result) return result.text;
   return generateFallbackResponse(userMessage);
 }
 
@@ -126,7 +126,7 @@ export const agentsRouter = createRouter({
       };
 
       // Generate AI response via Gemini (resilient client)
-      const aiResponse = await generateResponse(systemPrompts[input.agentType], input.message);
+      const aiResponse = await generateResponse(input.agentType, systemPrompts[input.agentType], input.message);
 
       // Save agent response
       await db.insert(agentMessages).values({

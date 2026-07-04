@@ -3,7 +3,7 @@
 import { getDb } from "../queries/connection";
 import { agentTasks, agentMessages } from "@db/schema";
 import { eq } from "drizzle-orm";
-import { callGemini } from "../lib/gemini";
+import { routePrompt } from "../lib/model-router";
 
 interface CrewTask {
   id: number;
@@ -44,7 +44,8 @@ Respond ONLY with a JSON array like:
 
 Create 3-6 tasks. Tasks should be specific and actionable. Consider dependencies (research before creation, creation before publishing).`;
 
-  const text = await callGemini(prompt, { temperature: 0.3, maxTokens: 2048 });
+  const result = await routePrompt("planner", prompt, { temperature: 0.3, maxTokens: 2048 });
+  const text = result?.text ?? null;
   if (!text) return [{ description: goal, assignedAgent: "planner" }];
 
   // Extract JSON from response
@@ -168,8 +169,8 @@ ${tasks.map((t) => `Task ${t.id} (${t.assignedAgent}): ${t.status}\n${t.output ?
 
 Provide a concise final report with key outcomes and next steps.`;
 
-  const finalReport = await callGemini(reportPrompt, { temperature: 0.5, maxTokens: 2048 })
-    ?? "Crew execution complete.";
+  const reportResult = await routePrompt("planner", reportPrompt, { temperature: 0.5, maxTokens: 2048 });
+  const finalReport = reportResult?.text ?? "Crew execution complete.";
 
   return {
     crewId: Date.now(),

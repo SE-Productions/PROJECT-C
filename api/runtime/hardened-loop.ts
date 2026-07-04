@@ -8,7 +8,7 @@ import { getDb } from "../queries/connection";
 import { agentMessages } from "@db/schema";
 import { searchMemory, writeMemory, writeAgentThought, getAgentContext, resolveAgentThoughts } from "./memory";
 import { reflectOnDecision, reflectOnResult } from "./reflection";
-import { callGemini } from "../lib/gemini";
+import { routePrompt } from "../lib/model-router";
 
 interface ModelResponse {
   text: string;
@@ -106,12 +106,12 @@ function extractKeywords(text: string): string[] {
     .slice(0, 6);
 }
 
-async function callModel(prompt: string, temperature: number): Promise<ModelResponse> {
-  const text = await callGemini(prompt, { temperature, maxTokens: 4096 });
-  if (!text) {
-    return { text: "The AI service is currently rate-limited. Please try again in a moment.", toolCalls: [] };
+async function callModel(agentType: string, prompt: string, temperature: number): Promise<ModelResponse> {
+  const result = await routePrompt(agentType, prompt, { temperature, maxTokens: 4096 });
+  if (!result) {
+    return { text: "All AI models are currently unavailable. Please try again in a moment.", toolCalls: [] };
   }
-  const { cleanText, toolCalls } = parseToolCalls(text);
+  const { cleanText, toolCalls } = parseToolCalls(result.text);
   return { text: cleanText, toolCalls };
 }
 
@@ -166,7 +166,7 @@ export async function runHardenedAgentLoop(
 
     // (G + C + K + T + M) — Build prompt with full memory injection
     const prompt = await buildHardenedPrompt(ctx, taskId, userGoal);
-    const modelResp = await callModel(prompt, persona.temperature);
+    const modelResp = await callModel(ctx.agentType, prompt, persona.temperature);
 
     // No tool calls — agent is done, finalize
     if (modelResp.toolCalls.length === 0) {

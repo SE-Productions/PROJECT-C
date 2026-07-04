@@ -2,7 +2,7 @@
 // E = R[(G + C + K + T + M) → O → P → A → V → Δ → F]
 import { getDb } from "../queries/connection";
 import { reflectionLog } from "@db/schema";
-import { callGemini } from "../lib/gemini";
+import { routeGeneral } from "../lib/model-router";
 
 interface ReflectionInput {
   agentType: string;
@@ -23,7 +23,7 @@ interface ReflectionResult {
 
 /**
  * Reflect on a decision before executing it.
- * Retry-aware: uses resilient Gemini client with 429 backoff.
+ * Uses multi-model router — falls through models if one is rate-limited.
  */
 export async function reflectOnDecision(input: ReflectionInput): Promise<ReflectionResult> {
   const prompt = `You are a strict self-reflection system for an AI agent. Your job is to audit decisions.
@@ -51,15 +51,15 @@ Respond ONLY with valid JSON:
   "shouldContinue": true|false
 }`;
 
-  const text = await callGemini(prompt, { temperature: 0.1, maxTokens: 1024 });
-  if (!text) return fallbackReflection(input);
+  const result = await routeGeneral(prompt, { temperature: 0.1, maxTokens: 1024 });
+  if (!result) return fallbackReflection(input);
 
   try {
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const jsonMatch = result.text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return fallbackReflection(input);
     const parsed = JSON.parse(jsonMatch[0]);
 
-    const result: ReflectionResult = {
+    const r: ReflectionResult = {
       aligned: ["yes", "no", "partial"].includes(parsed.aligned) ? parsed.aligned : "partial",
       score: Math.min(1, Math.max(0, Number(parsed.score) || 0.5)),
       analysis: String(parsed.analysis ?? "No analysis provided."),
@@ -67,8 +67,8 @@ Respond ONLY with valid JSON:
       shouldContinue: parsed.aligned === "yes" || parsed.shouldContinue === true,
     };
 
-    await persistReflection(input, result);
-    return result;
+    await persistReflection(input, r);
+    return r;
   } catch {
     return fallbackReflection(input);
   }
@@ -93,11 +93,11 @@ Result: "${result}"
 Did the result satisfy the user's goal? Is the output complete and accurate?
 Respond with JSON: {"aligned": "yes|no|partial", "feedback": "explanation"}`;
 
-  const text = await callGemini(prompt, { temperature: 0.1, maxTokens: 512 });
-  if (!text) return { aligned: "partial", feedback: "Reflection service unavailable (rate limited or circuit open)." };
+  const resp = await routeGeneral(prompt, { temperature: 0.1, maxTokens: 512 });
+  if (!resp) return { aligned: "partial", feedback: "Reflection service unavailable (all models exhausted)." };
 
   try {
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const jsonMatch = resp.text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return { aligned: "partial", feedback: "Parse error." };
     const parsed = JSON.parse(jsonMatch[0]);
     return {
@@ -129,7 +129,7 @@ function fallbackReflection(_input: ReflectionInput): ReflectionResult {
   return {
     aligned: "partial",
     score: 0.5,
-    analysis: "Reflection engine unavailable (rate limited or circuit open). Proceeding with caution.",
+    analysis: "Reflection engine unavailable (all models exhausted). Proceeding with caution.",
     shouldContinue: true,
   };
 }
