@@ -24,14 +24,26 @@ app.use("/api/trpc/*", async (c) => {
 });
 app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
 
-// 2. Static files
-app.use("*", serveStatic({ root: "./dist/public" }));
+// 2. Static files with absolute path
+app.use("/*", serveStatic({ root: distPath }));
 
-// 3. SPA fallback — serve index.html for all non-API routes
+// 3. SPA fallback — only for non-file requests
 app.all("*", (c) => {
+  const url = new URL(c.req.url);
+  const pathname = url.pathname;
+
+  // Don't serve index.html for asset files (CSS, JS, images, fonts)
+  if (pathname.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json|mp4|webm)$/)) {
+    return c.json({ error: "Not Found" }, 404);
+  }
+
+  // Serve index.html for all SPA routes
   const indexPath = path.resolve(distPath, "index.html");
-  const content = fs.readFileSync(indexPath, "utf-8");
-  return c.html(content);
+  if (fs.existsSync(indexPath)) {
+    const content = fs.readFileSync(indexPath, "utf-8");
+    return c.html(content);
+  }
+  return c.json({ error: "Not Found" }, 404);
 });
 
 export default app;
