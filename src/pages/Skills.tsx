@@ -19,6 +19,7 @@ import {
   Terminal,
   RefreshCw,
 } from "lucide-react";
+import PageHero from "@/components/PageHero";
 
 const categoryConfig: Record<string, { label: string; icon: typeof Zap; color: string }> = {
   book_marketing: { label: "Book Marketing", icon: BookOpen, color: "bg-blue-600" },
@@ -83,19 +84,13 @@ export default function Skills() {
 
   return (
     <div className="p-4 lg:p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
+      <PageHero
+        image="/images/hero-skills.jpg"
+        title="Skill Library"
+        subtitle={`${skills?.length ?? 0} state-of-the-art skills available for runtime agent execution`}
+        height="sm"
+      />
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-amber-500/15">
-            <Zap className="h-6 w-6 text-amber-500" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-white">Skill Library</h1>
-            <p className="text-sm text-neutral-400">
-              {skills?.length ?? 0} state-of-the-art skills available for runtime agent execution
-            </p>
-          </div>
-        </div>
         <div className="sm:ml-auto flex items-center gap-2">
           <button
             onClick={() => { setLoadStatus(""); loadMutation.mutate(); }}

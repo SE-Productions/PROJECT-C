@@ -268,15 +268,17 @@ export default function AgentHub() {
         {viewMode === "chat" ? (
           <>
             {/* Chat Header */}
-            <div className="h-14 flex items-center px-5 border-b border-neutral-800 bg-neutral-900/50">
-              <div className={cn("p-1.5 rounded-md mr-3", agent.bg)}>
+            <div className="relative h-14 flex items-center px-5 border-b border-neutral-800 overflow-hidden">
+              <img src="/images/hero-agents.jpg" alt="" className="absolute inset-0 w-full h-full object-cover opacity-20" />
+              <div className="absolute inset-0 bg-gradient-to-r from-neutral-900/80 to-neutral-900/40" />
+              <div className={cn("relative z-10 p-1.5 rounded-md mr-3", agent.bg)}>
                 <agent.icon className={cn("h-4 w-4", agent.color)} />
               </div>
-              <div>
+              <div className="relative z-10">
                 <div className="text-sm font-medium text-white">{agent.name} <span className="text-neutral-500 text-xs">({agent.role})</span></div>
                 <div className="text-xs text-neutral-400">{agent.desc}</div>
               </div>
-              <div className="ml-auto flex items-center gap-2">
+              <div className="relative z-10 ml-auto flex items-center gap-2">
                 <div className="h-2 w-2 rounded-full bg-emerald-500" />
                 <span className="text-xs text-neutral-400">Runtime Active</span>
               </div>

@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  GraduationCap,
   Bot,
   Image,
   Share2,
@@ -16,6 +15,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import PageHero from "@/components/PageHero";
 
 interface Section {
   id: string;
@@ -374,18 +374,12 @@ export default function Learn() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="p-2 rounded-lg bg-amber-500/10">
-            <GraduationCap className="h-6 w-6 text-amber-500" />
-          </div>
-          <h2 className="text-2xl font-bold text-white">Learn AURA</h2>
-        </div>
-        <p className="text-sm text-neutral-400">
-          Everything you need to master AURA Publishing — from your first book to your first viral post.
-        </p>
-      </div>
+      <PageHero
+        image="/images/hero-learn.jpg"
+        title="Learn AURA"
+        subtitle="Everything you need to master AURA Publishing — from your first book to your first viral post."
+        height="md"
+      />
 
       {/* Quick Start Banner */}
       <div className="p-5 rounded-xl bg-gradient-to-r from-amber-500/10 to-amber-600/5 border border-amber-500/20 mb-8">

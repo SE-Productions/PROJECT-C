@@ -202,10 +202,13 @@ export default function SmartChat() {
       <div className="flex-1 overflow-y-auto p-5 space-y-4">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center max-w-lg mx-auto">
-            <div className="p-5 rounded-2xl bg-amber-500/10 mb-5">
-              <Wand2 className="h-10 w-10 text-amber-500" />
+            <div className="relative w-full h-40 rounded-xl overflow-hidden mb-5">
+              <img src="/images/hero-chat.jpg" alt="Smart Chat" className="w-full h-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-neutral-950/80 to-transparent" />
+              <div className="absolute bottom-3 left-4">
+                <h2 className="text-lg font-bold text-white">What do you want to create?</h2>
+              </div>
             </div>
-            <h2 className="text-xl font-bold text-white mb-2">What do you want to create?</h2>
             <p className="text-sm text-neutral-400 mb-6">
               Just describe what you need in plain English. I'll figure out which agents to use, what tools to call, and get it done.
             </p>

@@ -8,6 +8,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import ComposioDropdown from "@/components/ComposioDropdown";
+import PageHero from "@/components/PageHero";
 
 interface ApiKeyStatus {
   name: string;
@@ -51,12 +52,12 @@ export default function SettingsPage() {
 
   return (
     <div className="p-6 space-y-6 max-w-3xl">
-      <div>
-        <h2 className="text-2xl font-bold text-white">Settings</h2>
-        <p className="text-sm text-neutral-400 mt-1">
-          Manage API keys and platform connections
-        </p>
-      </div>
+      <PageHero
+        image="/images/hero-settings.jpg"
+        title="Settings"
+        subtitle="Manage API keys and platform connections"
+        height="sm"
+      />
 
       {/* Composio Integration Dropdown */}
       <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">

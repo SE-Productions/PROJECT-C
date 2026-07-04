@@ -25,6 +25,7 @@ import {
   Sparkles,
   Play,
 } from "lucide-react";
+import PageHero from "@/components/PageHero";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -109,13 +110,13 @@ export default function MediaGallery() {
 
   return (
     <div className="p-6 space-y-6">
+      <PageHero
+        image="/images/hero-media.jpg"
+        title="Media Gallery"
+        subtitle="AI-generated images and videos for your campaigns"
+        height="sm"
+      />
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-white">Media Gallery</h2>
-          <p className="text-sm text-neutral-400 mt-1">
-            AI-generated images and videos for your campaigns
-          </p>
-        </div>
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
           <DialogTrigger asChild>
             <Button className="bg-violet-500 hover:bg-violet-600 text-white font-medium">

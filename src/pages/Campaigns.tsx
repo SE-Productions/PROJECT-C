@@ -28,6 +28,7 @@ import {
   Pause,
   Trash2,
 } from "lucide-react";
+import PageHero from "@/components/PageHero";
 import { toast } from "sonner";
 
 const platforms = [
@@ -101,13 +102,13 @@ export default function Campaigns() {
 
   return (
     <div className="p-6 space-y-6">
+      <PageHero
+        image="/images/hero-campaigns.jpg"
+        title="Campaigns"
+        subtitle="Marketing campaigns for your books"
+        height="sm"
+      />
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-white">Campaigns</h2>
-          <p className="text-sm text-neutral-400 mt-1">
-            Marketing campaigns for your books
-          </p>
-        </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button className="bg-amber-500 hover:bg-amber-600 text-black font-medium">

@@ -10,6 +10,7 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { Link } from "react-router";
+import PageHero from "@/components/PageHero";
 
 export default function Dashboard() {
   const { data: books } = trpc.books.list.useQuery();
@@ -58,13 +59,14 @@ export default function Dashboard() {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold text-white">Dashboard</h2>
-        <p className="text-sm text-neutral-400 mt-1">
-          Overview of your publishing operations
-        </p>
-      </div>
+      <PageHero
+        image="/images/hero-dashboard.jpg"
+        title="Dashboard"
+        subtitle="Overview of your publishing operations"
+        height="sm"
+      />
+
+      {/* Stats Grid */}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

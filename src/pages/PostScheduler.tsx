@@ -32,6 +32,7 @@ import {
   Twitter,
   Youtube,
 } from "lucide-react";
+import PageHero from "@/components/PageHero";
 import { toast } from "sonner";
 
 const platformIcons: Record<string, React.ReactNode> = {
@@ -120,13 +121,13 @@ export default function PostScheduler() {
 
   return (
     <div className="p-6 space-y-6">
+      <PageHero
+        image="/images/hero-scheduler.jpg"
+        title="Post Scheduler"
+        subtitle="Create, schedule, and publish social media posts"
+        height="sm"
+      />
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-white">Post Scheduler</h2>
-          <p className="text-sm text-neutral-400 mt-1">
-            Create, schedule, and publish social media posts
-          </p>
-        </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button className="bg-emerald-500 hover:bg-emerald-600 text-black font-medium">

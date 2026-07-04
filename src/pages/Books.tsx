@@ -27,6 +27,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import PageHero from "@/components/PageHero";
 
 const genres = [
   "Fiction", "Non-Fiction", "Mystery", "Romance", "Sci-Fi",
@@ -105,13 +106,13 @@ export default function Books() {
 
   return (
     <div className="p-6 space-y-6">
+      <PageHero
+        image="/images/hero-books.jpg"
+        title="Books"
+        subtitle="Manage your publishing catalog"
+        height="sm"
+      />
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-white">Books</h2>
-          <p className="text-sm text-neutral-400 mt-1">
-            Manage your publishing catalog
-          </p>
-        </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button className="bg-amber-500 hover:bg-amber-600 text-black font-medium">
