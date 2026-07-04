@@ -1,9 +1,11 @@
-// Scratch Pad Router — CRUD for global memory, agent thoughts, and reflection logs
+// Scratch Pad Router — CRUD for global memory, agent thoughts, reflection logs, and skill library
 import { z } from "zod";
 import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { scratchPad, agentScratchPad, reflectionLog } from "@db/schema";
 import { eq, desc, like, or, and } from "drizzle-orm";
+import { loadSkillsToRagLibrary, reloadSkills } from "./skills/loader";
+import { SKILL_REGISTRY, findSkillsByKeyword, getAllCategories } from "./skills/registry";
 
 export const scratchPadRouter = createRouter({
   // ─── GLOBAL SCRATCH PAD ───
@@ -235,5 +237,65 @@ export const scratchPadRouter = createRouter({
       totalReflections: reflections?.count ?? 0,
       byCategory: categoryCounts,
     };
+  }),
+
+  // ─── SKILL LIBRARY ───
+
+  listSkills: publicQuery
+    .input(z.object({
+      category: z.string().optional(),
+      agentType: z.enum(["planner", "search", "media", "social", "any"]).optional(),
+      search: z.string().optional(),
+    }).optional())
+    .query(({ input }) => {
+      let skills = [...SKILL_REGISTRY];
+      if (input?.category) skills = skills.filter((s) => s.category === input.category);
+      if (input?.agentType) skills = skills.filter((s) => s.agentType === input.agentType || s.agentType === "any");
+      if (input?.search) {
+        const q = input.search.toLowerCase();
+        skills = skills.filter((s) =>
+          s.name.toLowerCase().includes(q) ||
+          s.description.toLowerCase().includes(q) ||
+          s.triggerKeywords.some((k) => k.toLowerCase().includes(q))
+        );
+      }
+      return skills.map((s) => ({
+        id: s.id, name: s.name, category: s.category, description: s.description,
+        triggerKeywords: s.triggerKeywords, agentType: s.agentType,
+        complexity: s.complexity, tools: s.tools, siePhase: s.siePhase,
+        examples: s.examples,
+      }));
+    }),
+
+  getSkill: publicQuery
+    .input(z.object({ id: z.string() }))
+    .query(({ input }) => {
+      const skill = SKILL_REGISTRY.find((s) => s.id === input.id);
+      if (!skill) return null;
+      return skill;
+    }),
+
+  findSkills: publicQuery
+    .input(z.object({ query: z.string().min(1) }))
+    .query(({ input }) => {
+      return findSkillsByKeyword(input.query).map((s) => ({
+        id: s.id, name: s.name, category: s.category, description: s.description,
+        triggerKeywords: s.triggerKeywords, agentType: s.agentType,
+        complexity: s.complexity, executionSteps: s.executionSteps,
+        tools: s.tools, contextRequired: s.contextRequired,
+        outputFormat: s.outputFormat, examples: s.examples, siePhase: s.siePhase,
+      }));
+    }),
+
+  getSkillCategories: publicQuery.query(() => getAllCategories()),
+
+  loadSkills: publicQuery.mutation(async () => {
+    const result = await loadSkillsToRagLibrary();
+    return result;
+  }),
+
+  reloadSkills: publicQuery.mutation(async () => {
+    const result = await reloadSkills();
+    return result;
   }),
 });

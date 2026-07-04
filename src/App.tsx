@@ -10,6 +10,7 @@ import Learn from "./pages/Learn";
 import Settings from "./pages/Settings";
 import SmartChat from "./pages/SmartChat";
 import ScratchPad from "./pages/ScratchPad";
+import Skills from "./pages/Skills";
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
         <Route path="/media" element={<MediaGallery />} />
         <Route path="/posts" element={<PostScheduler />} />
         <Route path="/scratch-pad" element={<ScratchPad />} />
+        <Route path="/skills" element={<Skills />} />
         <Route path="/learn" element={<Learn />} />
         <Route path="/settings" element={<Settings />} />
       </Route>

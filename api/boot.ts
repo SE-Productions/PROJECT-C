@@ -7,6 +7,7 @@ import { createContext } from "./context";
 import { serveStatic } from "@hono/node-server/serve-static";
 import fs from "fs";
 import path from "path";
+import { loadSkillsToRagLibrary } from "./skills/loader";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 const distPath = path.resolve(import.meta.dirname, "../dist/public");
@@ -45,5 +46,9 @@ if (process.env.NODE_ENV === "production" || process.env.PORT) {
     hostname: "0.0.0.0",
   }, () => {
     console.log(`Server running on http://0.0.0.0:${port}/`);
+    // Load skills into RAG library on boot
+    loadSkillsToRagLibrary().catch((err) =>
+      console.error("[Boot] Skill loader failed:", err.message)
+    );
   });
 }

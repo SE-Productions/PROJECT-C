@@ -15,6 +15,7 @@ import {
   GraduationCap,
   Wand2,
   Lightbulb,
+  Zap,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -29,6 +30,7 @@ const navItems = [
   { to: "/media", icon: Image, label: "Media" },
   { to: "/posts", icon: CalendarDays, label: "Scheduler" },
   { to: "/scratch-pad", icon: Lightbulb, label: "Scratch Pad" },
+  { to: "/skills", icon: Zap, label: "Skills" },
   { to: "/learn", icon: GraduationCap, label: "Learn" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
