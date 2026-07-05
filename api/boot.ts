@@ -166,8 +166,8 @@ app.use("/api/*", async (c, next) => {
 
 // 4. API Key Authentication for tRPC endpoints
 app.use("/api/trpc/*", async (c, next) => {
-  // Skip auth for health check
-  if (c.req.url.endsWith("/ping")) {
+  // Skip auth for health checks (these are safe, read-only, no sensitive data)
+  if (c.req.url.endsWith("/ping") || c.req.url.endsWith("/health.checkKeys")) {
     await next();
     return;
   }
