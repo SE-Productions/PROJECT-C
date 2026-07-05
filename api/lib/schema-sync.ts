@@ -1,12 +1,27 @@
 // Schema Sync — Automatically creates tables on boot if they don't exist
 // Uses raw mysql2 driver for CREATE TABLE operations (more reliable than Drizzle execute)
-import { createConnection } from "mysql2/promise";
+import { createConnection, type ConnectionOptions } from "mysql2/promise";
+import { parse } from "url";
 
 const DATABASE_URL = process.env.DATABASE_URL;
 
+function parseDbUrl(url: string): ConnectionOptions {
+  const parsed = parse(url, true);
+  const auth = parsed.auth?.split(":") ?? ["", ""];
+  return {
+    host: parsed.hostname ?? undefined,
+    port: parsed.port ? parseInt(parsed.port) : undefined,
+    user: auth[0] || undefined,
+    password: auth[1] || undefined,
+    database: parsed.pathname?.replace(/^\//, "") || undefined,
+    ssl: { rejectUnauthorized: false },
+  };
+}
+
 async function getRawConnection() {
   if (!DATABASE_URL) throw new Error("DATABASE_URL not set");
-  return createConnection(DATABASE_URL);
+  const opts = parseDbUrl(DATABASE_URL);
+  return createConnection(opts);
 }
 
 async function tableExists(conn: any, tableName: string): Promise<boolean> {
