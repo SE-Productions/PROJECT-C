@@ -4,6 +4,7 @@ import { getDb } from "./queries/connection";
 import { agentTasks, agentMessages, books } from "@db/schema";
 import { eq, desc } from "drizzle-orm";
 import { routePrompt } from "./lib/model-router";
+import { getInsertId } from "./lib/db-utils";
 
 async function generateResponse(agentType: string, systemPrompt: string, userMessage: string): Promise<string> {
   const prompt = `${systemPrompt}\n\nUser request: ${userMessage}`;
@@ -56,7 +57,7 @@ export const agentsRouter = createRouter({
         input: input.input ?? {},
         status: "pending",
       });
-      return { id: Number(result[0].insertId) };
+      return { id: Number(getInsertId(result)) };
     }),
 
   updateTask: publicQuery
@@ -188,7 +189,7 @@ export const agentsRouter = createRouter({
           input: t.input,
           status: "pending",
         });
-        taskIds.push(Number(result[0].insertId));
+        taskIds.push(Number(getInsertId(result)));
       }
 
       return { taskIds };

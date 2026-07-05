@@ -6,6 +6,7 @@ import { scratchPad, agentScratchPad, reflectionLog } from "@db/schema";
 import { eq, desc, like, or, and, count } from "drizzle-orm";
 import { loadSkillsToRagLibrary, reloadSkills } from "./skills/loader";
 import { SKILL_REGISTRY, findSkillsByKeyword, getAllCategories } from "./skills/registry";
+import { getInsertId } from "./lib/db-utils";
 
 export const scratchPadRouter = createRouter({
   // ─── GLOBAL SCRATCH PAD ───
@@ -93,7 +94,7 @@ export const scratchPadRouter = createRouter({
         tags: input.tags, source: input.source ?? null, bookId: input.bookId ?? null,
         accessCount: 0,
       });
-      return { id: Number(result[0].insertId) };
+      return { id: Number(getInsertId(result)) };
     }),
 
   update: publicQuery

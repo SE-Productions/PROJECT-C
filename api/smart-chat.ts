@@ -7,6 +7,7 @@ import { runCrew } from "./runtime/crew";
 import { getDb } from "./queries/connection";
 import { books, agentMessages, agentTasks } from "@db/schema";
 import { eq } from "drizzle-orm";
+import { getInsertId } from "./lib/db-utils";
 
 export const smartChatRouter = createRouter({
   // Step 1: Parse intent from natural language
@@ -65,7 +66,7 @@ export const smartChatRouter = createRouter({
         status: "running",
         input: { action: input.action, params: input.params },
       });
-      const taskId = Number(taskResult[0].insertId);
+      const taskId = Number(getInsertId(taskResult));
 
       try {
         const result = await runAgentLoop({

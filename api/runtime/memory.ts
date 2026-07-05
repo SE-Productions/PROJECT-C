@@ -2,6 +2,7 @@
 import { getDb } from "../queries/connection";
 import { scratchPad, agentScratchPad } from "@db/schema";
 import { eq, desc, like, or } from "drizzle-orm";
+import { getInsertId } from "../lib/db-utils";
 
 /**
  * Write a memory entry to the global scratch pad.
@@ -23,7 +24,7 @@ export async function writeMemory(
     bookId: opts?.bookId ?? null,
     accessCount: 0,
   });
-  return Number(result[0].insertId);
+  return Number(getInsertId(result));
 }
 
 /**
@@ -116,7 +117,7 @@ export async function writeAgentThought(
     reasoning: reasoning ?? null,
     status: "active",
   });
-  return Number(result[0].insertId);
+  return Number(getInsertId(result));
 }
 
 /**

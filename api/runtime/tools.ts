@@ -3,6 +3,7 @@ import type { Tool } from "./types";
 import { getDb } from "../queries/connection";
 import { posts, mediaAssets } from "@db/schema";
 import { generateA2eImage, generateA2eVideo } from "../lib/a2e";
+import { getInsertId } from "../lib/db-utils";
 
 export const TOOL_REGISTRY: Record<string, Tool> = {
   web_search: {
@@ -154,7 +155,7 @@ export const TOOL_REGISTRY: Record<string, Tool> = {
           content: params.content, scheduledAt: params.scheduled_at ? new Date(params.scheduled_at) : null,
           status: params.scheduled_at ? "scheduled" : "draft",
         });
-        return { success: true, output: `Post created (ID: ${result[0].insertId}).`, data: { postId: Number(result[0].insertId) } };
+        return { success: true, output: `Post created (ID: ${getInsertId(result)}).`, data: { postId: Number(getInsertId(result)) } };
       } catch (e: any) { return { success: false, output: `Failed: ${e.message}` }; }
     },
   },
@@ -193,7 +194,7 @@ export const TOOL_REGISTRY: Record<string, Tool> = {
           description: params.description ?? null, objective: params.objective as any,
           platforms: params.platforms.split(",").map((p: string) => p.trim()), status: "draft",
         });
-        return { success: true, output: `Campaign "${params.name}" created.`, data: { campaignId: Number(result[0].insertId) } };
+        return { success: true, output: `Campaign "${params.name}" created.`, data: { campaignId: Number(getInsertId(result)) } };
       } catch (e: any) { return { success: false, output: `Failed: ${e.message}` }; }
     },
   },

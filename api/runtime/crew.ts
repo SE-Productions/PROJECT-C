@@ -4,6 +4,7 @@ import { getDb } from "../queries/connection";
 import { agentTasks, agentMessages } from "@db/schema";
 import { eq } from "drizzle-orm";
 import { routePrompt } from "../lib/model-router";
+import { getInsertId } from "../lib/db-utils";
 
 interface CrewTask {
   id: number;
@@ -79,7 +80,7 @@ async function executeCrewTask(task: CrewTask, bookId?: number): Promise<CrewTas
     status: "running",
     input: { crewTaskId: task.id, description: task.description },
   });
-  const dbTaskId = Number(result[0].insertId);
+  const dbTaskId = Number(getInsertId(result));
 
   try {
     // Get recent memory for this agent

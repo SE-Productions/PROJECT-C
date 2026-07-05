@@ -3,6 +3,7 @@ import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { mediaAssets } from "@db/schema";
 import { eq } from "drizzle-orm";
+import { getInsertId } from "./lib/db-utils";
 
 export const mediaRouter = createRouter({
   list: publicQuery.query(async () => {
@@ -40,7 +41,7 @@ export const mediaRouter = createRouter({
         platform: input.platform ?? null,
         status: input.status ?? "ready",
       });
-      return { id: Number(result[0].insertId) };
+      return { id: Number(getInsertId(result)) };
     }),
 
   update: publicQuery

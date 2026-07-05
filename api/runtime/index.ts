@@ -7,6 +7,7 @@ import { getDb } from "../queries/connection";
 import { agentMessages, agentTasks } from "@db/schema";
 import { eq } from "drizzle-orm";
 import type { AgentContext } from "./types";
+import { getInsertId } from "../lib/db-utils";
 
 // DB enum: planner, search, media, social (NOT "research")
 const agentTypeEnum = z.enum(["planner", "search", "media", "social"]);
@@ -48,7 +49,7 @@ export const runtimeRouter = createRouter({
         campaignId: input.campaignId ?? null, task: input.message,
         status: "running", input: { message: input.message, bookId: input.bookId },
       });
-      const taskId = Number(taskResult[0].insertId);
+      const taskId = Number(getInsertId(taskResult));
 
       try {
         const ctx: AgentContext = {

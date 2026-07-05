@@ -3,6 +3,7 @@ import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { posts } from "@db/schema";
 import { eq } from "drizzle-orm";
+import { getInsertId } from "./lib/db-utils";
 
 export const postsRouter = createRouter({
   list: publicQuery.query(async () => {
@@ -50,7 +51,7 @@ export const postsRouter = createRouter({
         scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : null,
         status: input.status ?? "draft",
       });
-      return { id: Number(result[0].insertId) };
+      return { id: Number(getInsertId(result)) };
     }),
 
   update: publicQuery

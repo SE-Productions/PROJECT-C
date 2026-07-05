@@ -3,6 +3,7 @@ import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { posts, agentTasks } from "@db/schema";
 import { eq } from "drizzle-orm";
+import { getInsertId } from "./lib/db-utils";
 
 const COMPOSIO_API_KEY = process.env.COMPOSIO_API_KEY;
 
@@ -49,7 +50,7 @@ export const socialRouter = createRouter({
         task: `Publishing to ${post.platform}: ${post.content.substring(0, 100)}`,
         status: "running",
       });
-      const taskId = Number(taskResult[0].insertId);
+      const taskId = Number(getInsertId(taskResult));
 
       try {
         let result: any;

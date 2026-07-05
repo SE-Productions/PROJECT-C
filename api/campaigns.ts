@@ -3,6 +3,7 @@ import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { campaigns } from "@db/schema";
 import { eq } from "drizzle-orm";
+import { getInsertId } from "./lib/db-utils";
 
 export const campaignsRouter = createRouter({
   list: publicQuery.query(async () => {
@@ -39,7 +40,7 @@ export const campaignsRouter = createRouter({
         endDate: input.endDate ? new Date(input.endDate) : null,
         status: "draft",
       });
-      return { id: Number(result[0].insertId) };
+      return { id: Number(getInsertId(result)) };
     }),
 
   update: publicQuery

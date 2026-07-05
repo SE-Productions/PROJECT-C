@@ -5,6 +5,7 @@ import { getDb } from "./queries/connection";
 import { agentTasks, agentMessages } from "@db/schema";
 import { eq, sql } from "drizzle-orm";
 import { runAgentLoop } from "./runtime/agent-loop";
+import { getInsertId } from "./lib/db-utils";
 
 const activeCronIntervals: Map<number, NodeJS.Timeout> = new Map();
 
@@ -68,7 +69,7 @@ export const cronRouter = createRouter({
       const db = getDb();
       try {
         const result = await db.execute(sql`INSERT INTO cron_jobs (name, description, agent_type, book_id, prompt, schedule, next_run_at, status, run_count) VALUES (${input.name}, ${input.description ?? null}, ${input.agentType}, ${input.bookId ?? null}, ${input.prompt}, ${input.schedule}, DATE_ADD(NOW(), INTERVAL 1 DAY), 'active', 0)`);
-        const jobId = Number((result as any).insertId ?? Date.now());
+        const jobId = Number(getInsertId(result) ?? Date.now());
         const intervalMs = getIntervalMs(input.schedule);
         const interval = setInterval(() => {
           executeCronJob(jobId, input.agentType, input.prompt, input.bookId);
@@ -93,7 +94,7 @@ export const cronRouter = createRouter({
           updated_at TIMESTAMP DEFAULT NOW() ON UPDATE NOW()
         )`);
         const result = await db.execute(sql`INSERT INTO cron_jobs (name, description, agent_type, book_id, prompt, schedule, next_run_at, status, run_count) VALUES (${input.name}, ${input.description ?? null}, ${input.agentType}, ${input.bookId ?? null}, ${input.prompt}, ${input.schedule}, DATE_ADD(NOW(), INTERVAL 1 DAY), 'active', 0)`);
-        const jobId = Number((result as any).insertId ?? Date.now());
+        const jobId = Number(getInsertId(result) ?? Date.now());
         const intervalMs = getIntervalMs(input.schedule);
         const interval = setInterval(() => {
           executeCronJob(jobId, input.agentType, input.prompt, input.bookId);

@@ -3,6 +3,7 @@ import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { mediaAssets } from "@db/schema";
 import { eq } from "drizzle-orm";
+import { getInsertId } from "./lib/db-utils";
 
 // Image generation via NVIDIA Stable Diffusion XL
 async function generateImage(prompt: string): Promise<string> {
@@ -107,7 +108,7 @@ export const generateRouter = createRouter({
         status: "generating",
         platform: input.platform ?? null,
       });
-      const assetId = Number(result[0].insertId);
+      const assetId = Number(getInsertId(result));
 
       try {
         const imageUrl = await generateImage(input.prompt);
@@ -146,7 +147,7 @@ export const generateRouter = createRouter({
         status: "generating",
         platform: input.platform ?? null,
       });
-      const assetId = Number(result[0].insertId);
+      const assetId = Number(getInsertId(result));
 
       try {
         const { url, thumbnailUrl } = await generateVideo(input.prompt);

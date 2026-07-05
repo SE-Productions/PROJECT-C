@@ -3,6 +3,7 @@ import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { books } from "@db/schema";
 import { eq } from "drizzle-orm";
+import { getInsertId } from "./lib/db-utils";
 
 export const booksRouter = createRouter({
   list: publicQuery.query(async () => {
@@ -40,7 +41,7 @@ export const booksRouter = createRouter({
         publishDate: input.publishDate ? new Date(input.publishDate) : null,
         status: "active",
       });
-      return { id: Number(result[0].insertId) };
+      return { id: Number(getInsertId(result)) };
     }),
 
   update: publicQuery
