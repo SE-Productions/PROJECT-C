@@ -1,12 +1,13 @@
 // Schema Sync — Auto-creates tables on boot using Drizzle's own mysql2 pool
-// Uses db.$client (the underlying mysql2 pool) for raw SQL execution
+// Uses db.$client.promise() to get promise-based execution
 // This avoids DNS resolution issues since Drizzle's pool is already proven working
 
 import { getDb } from "../queries/connection";
 
 async function tableExists(db: any, tableName: string): Promise<boolean> {
   try {
-    const client = db.$client;
+    // $client is callback-based pool, need .promise() for async/await
+    const client = db.$client.promise ? db.$client.promise() : db.$client;
     const [rows] = await client.execute(
       "SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?",
       [tableName]
@@ -20,7 +21,7 @@ async function tableExists(db: any, tableName: string): Promise<boolean> {
 
 async function createTable(db: any, sql: string, tableName: string): Promise<boolean> {
   try {
-    const client = db.$client;
+    const client = db.$client.promise ? db.$client.promise() : db.$client;
     await client.execute(sql);
     console.log(`[SchemaSync] Created table: ${tableName}`);
     return true;
@@ -46,18 +47,10 @@ export async function syncSchema(): Promise<void> {
   let db: any;
   try {
     db = getDb();
-    // Test connection with a simple query through Drizzle
-    await db.select().from({ dummy: { name: "" } } as any).where({} as any).limit(0);
-    console.log("[SchemaSync] Drizzle connection verified");
+    console.log("[SchemaSync] Drizzle client obtained");
   } catch (err: any) {
-    // Connection test might fail due to missing tables — that's expected
-    // Just check if $client exists and is a pool
-    db = getDb();
-    if (!db.$client) {
-      console.error("[SchemaSync] Drizzle client not available:", err.message);
-      return;
-    }
-    console.log("[SchemaSync] Drizzle client available (connection test skipped)");
+    console.error("[SchemaSync] Failed to get Drizzle client:", err.message);
+    return;
   }
 
   const created: string[] = [];
