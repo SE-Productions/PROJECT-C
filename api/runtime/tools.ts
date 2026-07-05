@@ -2,6 +2,7 @@
 import type { Tool } from "./types";
 import { getDb } from "../queries/connection";
 import { posts, mediaAssets } from "@db/schema";
+import { generateA2eImage, generateA2eVideo } from "../lib/a2e";
 
 export const TOOL_REGISTRY: Record<string, Tool> = {
   web_search: {
@@ -41,14 +42,32 @@ export const TOOL_REGISTRY: Record<string, Tool> = {
 
   generate_image: {
     name: "generate_image",
-    description: "Generate a promotional image using AI. Returns base64 data URL.",
+    description: "Generate a promotional image using AI via A2E (primary) or NVIDIA (fallback). Returns image URL(s).",
     parameters: {
       prompt: { type: "string", description: "Image description", required: true },
       book_id: { type: "number", description: "Book ID", required: false },
-      platform: { type: "string", description: "Target platform", required: false },
+      platform: { type: "string", description: "Target platform (instagram, tiktok, etc)", required: false },
+      aspect_ratio: { type: "string", description: "Aspect ratio: 1:1, 4:3, 16:9, 9:16, 2:3, 3:2", required: false },
+      model_type: { type: "string", description: "Model: a2e, seedream, flux2, nanobanana, gptimage", required: false },
     },
     execute: async (params) => {
       try {
+        // Try A2E first
+        if (process.env.A2E_API_KEY) {
+          const images = await generateA2eImage(params.prompt, {
+            aspectRatio: params.aspect_ratio || "1:1",
+            modelType: params.model_type || "a2e",
+            maxImages: 1,
+          });
+          if (images.length > 0) {
+            await getDb().insert(mediaAssets).values({
+              bookId: params.book_id ?? null, type: "image", prompt: params.prompt,
+              url: images[0], status: "ready", platform: params.platform ?? null,
+            });
+            return { success: true, output: "Image generated via A2E.", data: { imageUrl: images[0] } };
+          }
+        }
+        // Fallback to NVIDIA
         const resp = await fetch("https://ai.api.nvidia.com/v1/genai/stabilityai/stable-diffusion-xl", {
           method: "POST",
           headers: { Authorization: `Bearer ${process.env.NVIDIA_API_KEY}`, "Content-Type": "application/json" },
@@ -65,20 +84,38 @@ export const TOOL_REGISTRY: Record<string, Tool> = {
           bookId: params.book_id ?? null, type: "image", prompt: params.prompt,
           url: base64, status: "ready", platform: params.platform ?? null,
         });
-        return { success: true, output: "Image generated and saved.", data: { imageUrl: base64 } };
+        return { success: true, output: "Image generated via NVIDIA.", data: { imageUrl: base64 } };
       } catch (e: any) { return { success: false, output: `Failed: ${e.message}` }; }
     },
   },
 
   generate_video: {
     name: "generate_video",
-    description: "Generate video thumbnail and save video request.",
+    description: "Generate AI video from image+prompt via A2E (primary) or save thumbnail via NVIDIA (fallback).",
     parameters: {
-      prompt: { type: "string", description: "Scene description", required: true },
+      prompt: { type: "string", description: "Scene description / motion prompt", required: true },
       book_id: { type: "number", description: "Book ID", required: false },
+      image_url: { type: "string", description: "Source image URL for image-to-video", required: false },
+      duration: { type: "number", description: "Video duration in seconds (5-15)", required: false },
+      model_type: { type: "string", description: "Model: kling, veo, wan, happyhorse, seedance", required: false },
     },
     execute: async (params) => {
       try {
+        // Try A2E video generation if API key and image URL available
+        if (process.env.A2E_API_KEY && params.image_url) {
+          const videoUrl = await generateA2eVideo(params.image_url, params.prompt, {
+            duration: params.duration || 5,
+            modelType: params.model_type || "kling",
+          });
+          if (videoUrl) {
+            await getDb().insert(mediaAssets).values({
+              bookId: params.book_id ?? null, type: "video", prompt: params.prompt,
+              url: videoUrl, thumbnailUrl: params.image_url, status: "ready",
+            });
+            return { success: true, output: "Video generated via A2E.", data: { videoUrl, thumbnailUrl: params.image_url } };
+          }
+        }
+        // Fallback: generate thumbnail via NVIDIA
         const resp = await fetch("https://ai.api.nvidia.com/v1/genai/stabilityai/stable-diffusion-xl", {
           method: "POST",
           headers: { Authorization: `Bearer ${process.env.NVIDIA_API_KEY}`, "Content-Type": "application/json" },
@@ -96,7 +133,7 @@ export const TOOL_REGISTRY: Record<string, Tool> = {
           bookId: params.book_id ?? null, type: "video", prompt: params.prompt,
           url: "", thumbnailUrl: thumbnailUrl || null, status: "ready",
         });
-        return { success: true, output: "Video saved to gallery.", data: { thumbnailUrl } };
+        return { success: true, output: "Video thumbnail saved. Provide an image_url for full video generation.", data: { thumbnailUrl } };
       } catch (e: any) { return { success: false, output: `Failed: ${e.message}` }; }
     },
   },

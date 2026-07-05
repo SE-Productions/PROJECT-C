@@ -48,6 +48,13 @@ export default function SettingsPage() {
       color: "text-emerald-500",
       configured: true,
     },
+    {
+      name: "A2E Media",
+      key: "A2E_API_KEY",
+      icon: <Image className="h-5 w-5" />,
+      color: "text-pink-500",
+      configured: true,
+    },
   ];
 
   return (
