@@ -40,6 +40,21 @@ export default function MediaGallery() {
     },
   });
 
+  const IMAGE_MODELS = [
+    { id: "a2e", label: "A2E (default)", desc: "Balanced quality" },
+    { id: "seedream", label: "SeeDream", desc: "Ultra-realistic" },
+    { id: "flux2", label: "Flux 2", desc: "High detail" },
+    { id: "nanobanana", label: "NanoBanana", desc: "Fast generation" },
+    { id: "gptimage", label: "GPT Image", desc: "Best for text" },
+  ];
+
+  const VIDEO_MODELS = [
+    { id: "kling", label: "Kling (default)", desc: "Best quality" },
+    { id: "veo", label: "Veo", desc: "Google model" },
+    { id: "wan", label: "Wan", desc: "Smooth motion" },
+    { id: "seedance", label: "Seedance", desc: "Cinematic" },
+  ];
+
   const generateImage = trpc.generate.image.useMutation({
     onSuccess: (data) => {
       utils.media.list.invalidate();
@@ -74,6 +89,7 @@ export default function MediaGallery() {
     prompt: "",
     bookId: "",
     platform: "",
+    model: "a2e",
   });
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
 
@@ -92,18 +108,20 @@ export default function MediaGallery() {
         prompt: genForm.prompt,
         bookId: genForm.bookId ? parseInt(genForm.bookId) : undefined,
         platform: genForm.platform || undefined,
+        model: genForm.model,
       });
     } else {
       generateVideo.mutate({
         prompt: genForm.prompt,
         bookId: genForm.bookId ? parseInt(genForm.bookId) : undefined,
         platform: genForm.platform || undefined,
+        model: genForm.model,
       });
     }
   };
 
   const resetForm = () => {
-    setGenForm({ type: "image", prompt: "", bookId: "", platform: "" });
+    setGenForm({ type: "image", prompt: "", bookId: "", platform: "", model: "a2e" });
     setGeneratedUrl(null);
     setGenerating(false);
   };
@@ -154,6 +172,27 @@ export default function MediaGallery() {
                       >
                         <t.icon className="h-4 w-4" />
                         {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm text-neutral-400">AI Model</label>
+                  <div className="grid grid-cols-2 gap-2 mt-1">
+                    {(genForm.type === "image" ? IMAGE_MODELS : VIDEO_MODELS).map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setGenForm({ ...genForm, model: m.id })}
+                        className={cn(
+                          "flex flex-col items-start p-2.5 rounded-lg border transition-colors text-left",
+                          genForm.model === m.id
+                            ? "bg-violet-500/20 border-violet-500/40 text-violet-400"
+                            : "bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-neutral-600"
+                        )}
+                      >
+                        <span className="text-xs font-medium">{m.label}</span>
+                        <span className="text-[10px] text-neutral-500">{m.desc}</span>
                       </button>
                     ))}
                   </div>

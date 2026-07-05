@@ -4,13 +4,79 @@ import { getDb } from "./queries/connection";
 import { mediaAssets } from "@db/schema";
 import { eq } from "drizzle-orm";
 import { getInsertId } from "./lib/db-utils";
+import { generateA2eImage, generateA2eVideo, isA2eHealthy } from "./lib/a2e";
 
-// Image generation via NVIDIA Stable Diffusion XL
-async function generateImage(prompt: string): Promise<string> {
-  const nvidiaKey = process.env.NVIDIA_API_KEY;
-  if (!nvidiaKey) {
-    throw new Error("NVIDIA_API_KEY not configured");
+// ─── A2E PRIMARY → NVIDIA FALLBACK ───
+
+/** Generate image via A2E (primary) with NVIDIA fallback */
+async function generateImageWithFallback(
+  prompt: string,
+  modelType?: string
+): Promise<string> {
+  // Try A2E first
+  if (process.env.A2E_API_KEY) {
+    try {
+      const healthy = await isA2eHealthy();
+      if (healthy) {
+        const urls = await generateA2eImage(prompt, {
+          modelType: modelType || "a2e",
+          aspectRatio: "1:1",
+          height: 1024,
+          maxImages: 1,
+        });
+        if (urls.length > 0) return urls[0];
+      }
+    } catch (e: any) {
+      console.log(`[Generate] A2E image failed (${e.message}), falling back to NVIDIA`);
+    }
   }
+
+  // Fallback: NVIDIA Stable Diffusion XL
+  return generateImageNvidia(prompt);
+}
+
+/** Generate video via A2E (primary) with NVIDIA fallback */
+async function generateVideoWithFallback(
+  prompt: string,
+  modelType?: string
+): Promise<{ url: string; thumbnailUrl: string }> {
+  // Try A2E first: generate image → then video from image
+  if (process.env.A2E_API_KEY) {
+    try {
+      const healthy = await isA2eHealthy();
+      if (healthy) {
+        // Step 1: Generate an image first
+        const imageUrls = await generateA2eImage(prompt, {
+          modelType: "a2e",
+          aspectRatio: "16:9",
+          height: 576,
+          maxImages: 1,
+        });
+        if (imageUrls.length === 0) throw new Error("A2E image pre-generation failed");
+
+        // Step 2: Generate video from the image
+        const videoUrl = await generateA2eVideo(imageUrls[0], prompt, {
+          modelType: modelType || "kling",
+          duration: 5,
+          aspectRatio: "16:9",
+        });
+
+        return { url: videoUrl, thumbnailUrl: imageUrls[0] };
+      }
+    } catch (e: any) {
+      console.log(`[Generate] A2E video failed (${e.message}), falling back to NVIDIA`);
+    }
+  }
+
+  // Fallback: NVIDIA thumbnail + placeholder video
+  return generateVideoNvidia(prompt);
+}
+
+// ─── NVIDIA FALLBACK IMPLEMENTATIONS ───
+
+async function generateImageNvidia(prompt: string): Promise<string> {
+  const nvidiaKey = process.env.NVIDIA_API_KEY;
+  if (!nvidiaKey) throw new Error("NVIDIA_API_KEY not configured");
 
   const response = await fetch(
     "https://ai.api.nvidia.com/v1/genai/stabilityai/stable-diffusion-xl",
@@ -38,29 +104,23 @@ async function generateImage(prompt: string): Promise<string> {
     throw new Error(`NVIDIA API error: ${response.status} - ${err}`);
   }
 
-  // Response is binary image data
   const buffer = await response.arrayBuffer();
-  const base64 = Buffer.from(buffer).toString("base64");
-  return `data:image/png;base64,${base64}`;
+  return `data:image/png;base64,${Buffer.from(buffer).toString("base64")}`;
 }
 
-// Video generation - creates a prompt-driven video asset
-// For MVP: returns a structured video generation request that can be processed
-async function generateVideo(prompt: string): Promise<{ url: string; thumbnailUrl: string }> {
-  // Video generation requires external API. For the MVP, we create a structured
-  // generation request and return a generated video using the available tools.
-  // In production, this would call Runway, Pika, or similar.
+async function generateVideoNvidia(
+  prompt: string
+): Promise<{ url: string; thumbnailUrl: string }> {
+  const nvidiaKey = process.env.NVIDIA_API_KEY;
+  if (!nvidiaKey) throw new Error("NVIDIA_API_KEY not configured");
 
-  // Placeholder: generate a dynamic thumbnail and store the video request
-  // The actual video URL will be a placeholder that the user can replace
-  // with their own generated video file
-
-  const thumbnailResponse = await fetch(
+  // Generate a cinematic thumbnail frame
+  const thumbResponse = await fetch(
     "https://ai.api.nvidia.com/v1/genai/stabilityai/stable-diffusion-xl",
     {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${process.env.NVIDIA_API_KEY ?? ""}`,
+        "Authorization": `Bearer ${nvidiaKey}`,
         "Content-Type": "application/json",
         "NVCF-INPUT-ASSET-REFERENCES": "",
         "NVCF-FUNCTION-ID": "",
@@ -77,29 +137,32 @@ async function generateVideo(prompt: string): Promise<{ url: string; thumbnailUr
   );
 
   let thumbnailUrl = "";
-  if (thumbnailResponse.ok) {
-    const buffer = await thumbnailResponse.arrayBuffer();
+  if (thumbResponse.ok) {
+    const buffer = await thumbResponse.arrayBuffer();
     thumbnailUrl = `data:image/png;base64,${Buffer.from(buffer).toString("base64")}`;
   }
 
-  // Return with placeholder video - in production this would be a real video file
   return {
     url: `/api/video-placeholder?prompt=${encodeURIComponent(prompt)}`,
     thumbnailUrl,
   };
 }
 
+// ─── tRPC ROUTER ───
+
 export const generateRouter = createRouter({
   image: publicQuery
-    .input(z.object({
-      prompt: z.string().min(1),
-      bookId: z.number().optional(),
-      platform: z.string().optional(),
-    }))
+    .input(
+      z.object({
+        prompt: z.string().min(1),
+        bookId: z.number().optional(),
+        platform: z.string().optional(),
+        model: z.string().optional(), // a2e, seedream, flux2, nanobanana, gptimage
+      })
+    )
     .mutation(async ({ input }) => {
       const db = getDb();
 
-      // Save initial record with placeholder URL (non-empty to satisfy NOT NULL)
       const result = await db.insert(mediaAssets).values({
         bookId: input.bookId ?? null,
         type: "image",
@@ -111,33 +174,35 @@ export const generateRouter = createRouter({
       const assetId = Number(getInsertId(result));
 
       try {
-        const imageUrl = await generateImage(input.prompt);
+        const imageUrl = await generateImageWithFallback(input.prompt, input.model);
 
-        await db.update(mediaAssets).set({
-          url: imageUrl,
-          status: "ready",
-        }).where(eq(mediaAssets.id, assetId));
+        await db
+          .update(mediaAssets)
+          .set({ url: imageUrl, status: "ready" })
+          .where(eq(mediaAssets.id, assetId));
 
         return { id: assetId, url: imageUrl, status: "ready" };
       } catch (error: any) {
-        await db.update(mediaAssets).set({
-          status: "failed",
-        }).where(eq(mediaAssets.id, assetId));
-
+        await db
+          .update(mediaAssets)
+          .set({ status: "failed" })
+          .where(eq(mediaAssets.id, assetId));
         throw new Error(error.message ?? "Image generation failed");
       }
     }),
 
   video: publicQuery
-    .input(z.object({
-      prompt: z.string().min(1),
-      bookId: z.number().optional(),
-      platform: z.string().optional(),
-    }))
+    .input(
+      z.object({
+        prompt: z.string().min(1),
+        bookId: z.number().optional(),
+        platform: z.string().optional(),
+        model: z.string().optional(), // kling, veo, wan, seedance
+      })
+    )
     .mutation(async ({ input }) => {
       const db = getDb();
 
-      // Save initial record with placeholder URLs (non-empty to satisfy NOT NULL)
       const result = await db.insert(mediaAssets).values({
         bookId: input.bookId ?? null,
         type: "video",
@@ -150,20 +215,22 @@ export const generateRouter = createRouter({
       const assetId = Number(getInsertId(result));
 
       try {
-        const { url, thumbnailUrl } = await generateVideo(input.prompt);
+        const { url, thumbnailUrl } = await generateVideoWithFallback(
+          input.prompt,
+          input.model
+        );
 
-        await db.update(mediaAssets).set({
-          url,
-          thumbnailUrl: thumbnailUrl || null,
-          status: "ready",
-        }).where(eq(mediaAssets.id, assetId));
+        await db
+          .update(mediaAssets)
+          .set({ url, thumbnailUrl: thumbnailUrl || null, status: "ready" })
+          .where(eq(mediaAssets.id, assetId));
 
         return { id: assetId, url, thumbnailUrl, status: "ready" };
       } catch (error: any) {
-        await db.update(mediaAssets).set({
-          status: "failed",
-        }).where(eq(mediaAssets.id, assetId));
-
+        await db
+          .update(mediaAssets)
+          .set({ status: "failed" })
+          .where(eq(mediaAssets.id, assetId));
         throw new Error(error.message ?? "Video generation failed");
       }
     }),

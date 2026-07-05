@@ -8,23 +8,41 @@ import {
   Share2,
   CheckCircle2,
   Shield,
+  XCircle,
+  Loader2,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { trpc } from "@/providers/trpc";
 import ComposioDropdown from "@/components/ComposioDropdown";
 import PageHero from "@/components/PageHero";
 
-interface ApiKeyStatus {
-  name: string;
-  key: string;
-  icon: React.ReactNode;
-  color: string;
-  configured: boolean;
-}
+const ICON_MAP: Record<string, React.ReactNode> = {
+  "A2E Media": <Image className="h-5 w-5" />,
+  "Gemini AI": <Bot className="h-5 w-5" />,
+  NVIDIA: <Image className="h-5 w-5" />,
+  Firecrawl: <Globe className="h-5 w-5" />,
+  Composio: <Share2 className="h-5 w-5" />,
+  Steel: <Globe className="h-5 w-5" />,
+};
+
+const COLOR_MAP: Record<string, string> = {
+  "A2E Media": "text-pink-500",
+  "Gemini AI": "text-sky-500",
+  NVIDIA: "text-violet-500",
+  Firecrawl: "text-emerald-500",
+  Composio: "text-amber-500",
+  Steel: "text-cyan-500",
+};
 
 export default function SettingsPage() {
   const [appSecret, setAppSecret] = useState("");
   const [authStatus, setAuthStatus] = useState<"unconfigured" | "configured">("unconfigured");
+
+  const { data: keyHealth, isLoading: healthLoading } = trpc.health.checkKeys.useQuery(
+    undefined,
+    { refetchInterval: 30000, retry: 1 }
+  );
 
   useEffect(() => {
     const stored = localStorage.getItem("aura_api_key");
@@ -47,43 +65,8 @@ export default function SettingsPage() {
     setAuthStatus("unconfigured");
   };
 
-  const apiKeys: ApiKeyStatus[] = [
-    {
-      name: "Composio",
-      key: "COMPOSIO_API_KEY",
-      icon: <Share2 className="h-5 w-5" />,
-      color: "text-amber-500",
-      configured: true,
-    },
-    {
-      name: "Gemini AI",
-      key: "GEMINI_API_KEY",
-      icon: <Bot className="h-5 w-5" />,
-      color: "text-sky-500",
-      configured: true,
-    },
-    {
-      name: "NVIDIA",
-      key: "NVIDIA_API_KEY",
-      icon: <Image className="h-5 w-5" />,
-      color: "text-violet-500",
-      configured: true,
-    },
-    {
-      name: "Firecrawl",
-      key: "FIRECRAWL_API_KEY",
-      icon: <Globe className="h-5 w-5" />,
-      color: "text-emerald-500",
-      configured: true,
-    },
-    {
-      name: "A2E Media",
-      key: "A2E_API_KEY",
-      icon: <Image className="h-5 w-5" />,
-      color: "text-pink-500",
-      configured: true,
-    },
-  ];
+  const connectedCount = keyHealth?.filter((k) => k.healthy).length ?? 0;
+  const totalCount = keyHealth?.length ?? 0;
 
   return (
     <div className="p-6 space-y-6 max-w-3xl">
@@ -94,43 +77,76 @@ export default function SettingsPage() {
         height="sm"
       />
 
-      {/* Composio Integration Dropdown */}
+      {/* System Status */}
+      <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+            <h3 className="font-semibold text-white">All Systems Active</h3>
+          </div>
+          <span className="text-xs text-neutral-400">
+            {connectedCount} of {totalCount} APIs connected
+          </span>
+        </div>
+        <div className="w-full bg-neutral-800 rounded-full h-2">
+          <div
+            className="bg-emerald-500 h-2 rounded-full transition-all"
+            style={{ width: totalCount > 0 ? `${(connectedCount / totalCount) * 100}%` : "0%" }}
+          />
+        </div>
+      </div>
+
+      {/* Composio Integration */}
       <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
         <ComposioDropdown />
       </div>
 
-      {/* API Keys */}
+      {/* API Keys — Live Health Status */}
       <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
         <div className="flex items-center gap-2 mb-4">
           <Key className="h-5 w-5 text-amber-500" />
           <h3 className="font-semibold text-white">API Keys</h3>
         </div>
-        <div className="space-y-3">
-          {apiKeys.map((api) => (
-            <div
-              key={api.name}
-              className="flex items-center gap-4 p-4 rounded-lg bg-neutral-800/50 border border-neutral-800"
-            >
-              <div className={`p-2 rounded-lg ${api.color} bg-neutral-800`}>
-                {api.icon}
+
+        {healthLoading ? (
+          <div className="flex items-center gap-2 py-4 text-neutral-400">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-sm">Checking API keys...</span>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {keyHealth?.map((api) => (
+              <div
+                key={api.envKey}
+                className="flex items-center gap-4 p-4 rounded-lg bg-neutral-800/50 border border-neutral-800"
+              >
+                <div className={`p-2 rounded-lg ${COLOR_MAP[api.name] || "text-neutral-400"} bg-neutral-800`}>
+                  {ICON_MAP[api.name] || <Key className="h-5 w-5" />}
+                </div>
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-white">{api.name}</div>
+                  <div className="text-xs text-neutral-400">{api.envKey}</div>
+                  {api.detail && (
+                    <div className="text-xs text-neutral-500 mt-0.5">{api.detail}</div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {api.healthy ? (
+                    <>
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                      <span className="text-xs text-emerald-400">Live</span>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="h-4 w-4 text-red-500" />
+                      <span className="text-xs text-red-400">{api.detail || "Down"}</span>
+                    </>
+                  )}
+                </div>
               </div>
-              <div className="flex-1">
-                <div className="text-sm font-medium text-white">{api.name}</div>
-                <div className="text-xs text-neutral-400">{api.key}</div>
-              </div>
-              <div className="flex items-center gap-2">
-                {api.configured ? (
-                  <>
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                    <span className="text-xs text-emerald-400">Configured</span>
-                  </>
-                ) : (
-                  <span className="text-xs text-red-400">Not set</span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* App Authentication */}
@@ -189,7 +205,7 @@ export default function SettingsPage() {
         <div className="mt-3 text-xs text-neutral-500 space-y-1">
           <p>Planner Agent: Orchestrates marketing campaigns</p>
           <p>Research Agent: Web search and trend analysis</p>
-          <p>Media Agent: Image and video generation</p>
+          <p>Media Agent: Image and video generation via A2E AI</p>
           <p>Social Agent: Social media content creation and publishing</p>
         </div>
       </div>
