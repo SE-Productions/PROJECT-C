@@ -65,7 +65,7 @@ export const mediaAssets = mysqlTable("media_assets", {
   campaignId: bigint("campaign_id", { mode: "number", unsigned: true }),
   type: mysqlEnum("type", ["image", "video"]).notNull(),
   prompt: text("prompt"),
-  url: varchar("url", { length: 1000 }).notNull(),
+  url: varchar("url", { length: 1000 }).default("").notNull(),
   thumbnailUrl: varchar("thumbnail_url", { length: 1000 }),
   platform: varchar("platform", { length: 50 }),
   status: mysqlEnum("status", ["generating", "ready", "failed"]).notNull().default("generating"),

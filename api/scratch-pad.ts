@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { scratchPad, agentScratchPad, reflectionLog } from "@db/schema";
-import { eq, desc, like, or, and } from "drizzle-orm";
+import { eq, desc, like, or, and, count } from "drizzle-orm";
 import { loadSkillsToRagLibrary, reloadSkills } from "./skills/loader";
 import { SKILL_REGISTRY, findSkillsByKeyword, getAllCategories } from "./skills/registry";
 
@@ -219,9 +219,9 @@ export const scratchPadRouter = createRouter({
 
   getStats: publicQuery.query(async () => {
     const db = getDb();
-    const [memories] = await db.select({ count: db.$count(scratchPad) }).from(scratchPad);
-    const [thoughts] = await db.select({ count: db.$count(agentScratchPad) }).from(agentScratchPad);
-    const [reflections] = await db.select({ count: db.$count(reflectionLog) }).from(reflectionLog);
+    const [memories] = await db.select({ count: count() }).from(scratchPad);
+    const [thoughts] = await db.select({ count: count() }).from(agentScratchPad);
+    const [reflections] = await db.select({ count: count() }).from(reflectionLog);
 
     // Count by category
     const byCategory = await db.select({ category: scratchPad.category }).from(scratchPad);
