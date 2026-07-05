@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import {
   Settings,
   Key,
@@ -6,7 +7,10 @@ import {
   Image,
   Share2,
   CheckCircle2,
+  Shield,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import ComposioDropdown from "@/components/ComposioDropdown";
 import PageHero from "@/components/PageHero";
 
@@ -19,6 +23,30 @@ interface ApiKeyStatus {
 }
 
 export default function SettingsPage() {
+  const [appSecret, setAppSecret] = useState("");
+  const [authStatus, setAuthStatus] = useState<"unconfigured" | "configured">("unconfigured");
+
+  useEffect(() => {
+    const stored = localStorage.getItem("aura_api_key");
+    if (stored) {
+      setAppSecret(stored);
+      setAuthStatus("configured");
+    }
+  }, []);
+
+  const saveSecret = () => {
+    if (appSecret.trim()) {
+      localStorage.setItem("aura_api_key", appSecret.trim());
+      setAuthStatus("configured");
+    }
+  };
+
+  const clearSecret = () => {
+    localStorage.removeItem("aura_api_key");
+    setAppSecret("");
+    setAuthStatus("unconfigured");
+  };
+
   const apiKeys: ApiKeyStatus[] = [
     {
       name: "Composio",
@@ -103,6 +131,50 @@ export default function SettingsPage() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* App Authentication */}
+      <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Shield className="h-5 w-5 text-rose-500" />
+          <h3 className="font-semibold text-white">App Authentication</h3>
+        </div>
+        <p className="text-sm text-neutral-400 mb-4">
+          Set your APP_SECRET to authenticate API requests in production.
+          Must match the APP_SECRET environment variable on the server.
+        </p>
+        <div className="flex gap-3">
+          <Input
+            type="password"
+            placeholder="Enter APP_SECRET..."
+            value={appSecret}
+            onChange={(e) => setAppSecret(e.target.value)}
+            className="flex-1 bg-neutral-800 border-neutral-700 text-white"
+          />
+          <Button
+            onClick={saveSecret}
+            className="bg-amber-600 hover:bg-amber-700 text-white"
+          >
+            Save
+          </Button>
+          {authStatus === "configured" && (
+            <Button
+              onClick={clearSecret}
+              variant="outline"
+              className="border-neutral-700 text-neutral-400 hover:text-white"
+            >
+              Clear
+            </Button>
+          )}
+        </div>
+        {authStatus === "configured" && (
+          <div className="flex items-center gap-2 mt-3">
+            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+            <span className="text-xs text-emerald-400">
+              Authentication configured. API requests will include x-api-key header.
+            </span>
+          </div>
+        )}
       </div>
 
       {/* About */}

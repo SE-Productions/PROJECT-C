@@ -13,6 +13,11 @@ const trpcClient = trpc.createClient({
     httpBatchLink({
       url: "/api/trpc",
       transformer: superjson,
+      headers() {
+        // Send API key auth header if set in localStorage
+        const apiKey = localStorage.getItem("aura_api_key");
+        return apiKey ? { "x-api-key": apiKey } : {};
+      },
       fetch(input, init) {
         return globalThis.fetch(input, {
           ...(init ?? {}),

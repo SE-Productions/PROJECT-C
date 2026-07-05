@@ -23,41 +23,59 @@ interface A2eVideoResponse {
   message?: string;
 }
 
+const A2E_TIMEOUT_MS = 60_000; // 60 second timeout for all A2E requests
+
 async function a2eRequest(path: string, body: any): Promise<any> {
   if (!A2E_API_KEY) throw new Error("A2E_API_KEY not configured");
 
-  const resp = await fetch(`${A2E_BASE_URL}${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${A2E_API_KEY}`,
-    },
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), A2E_TIMEOUT_MS);
 
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`A2E ${resp.status}: ${text.substring(0, 200)}`);
+  try {
+    const resp = await fetch(`${A2E_BASE_URL}${path}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${A2E_API_KEY}`,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`A2E ${resp.status}: ${text.substring(0, 200)}`);
+    }
+
+    return resp.json();
+  } finally {
+    clearTimeout(timeout);
   }
-
-  return resp.json();
 }
 
 async function a2eGet(path: string): Promise<any> {
   if (!A2E_API_KEY) throw new Error("A2E_API_KEY not configured");
 
-  const resp = await fetch(`${A2E_BASE_URL}${path}`, {
-    headers: {
-      "Authorization": `Bearer ${A2E_API_KEY}`,
-    },
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), A2E_TIMEOUT_MS);
 
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`A2E ${resp.status}: ${text.substring(0, 200)}`);
+  try {
+    const resp = await fetch(`${A2E_BASE_URL}${path}`, {
+      headers: {
+        "Authorization": `Bearer ${A2E_API_KEY}`,
+      },
+      signal: controller.signal,
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`A2E ${resp.status}: ${text.substring(0, 200)}`);
+    }
+
+    return resp.json();
+  } finally {
+    clearTimeout(timeout);
   }
-
-  return resp.json();
 }
 
 /**
@@ -183,13 +201,18 @@ function sleep(ms: number): Promise<void> {
  */
 export async function isA2eHealthy(): Promise<boolean> {
   if (!A2E_API_KEY) return false;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000); // 10s health check timeout
+
   try {
-    // Try to get records (lightweight call)
     const resp = await fetch(`${A2E_BASE_URL}/api/v1/userText2Image/allRecords?limit=1`, {
       headers: { "Authorization": `Bearer ${A2E_API_KEY}` },
+      signal: controller.signal,
     });
     return resp.ok;
   } catch {
     return false;
+  } finally {
+    clearTimeout(timeout);
   }
 }

@@ -13,7 +13,97 @@ import { syncSchema } from "./lib/schema-sync";
 const app = new Hono<{ Bindings: HttpBindings }>();
 const distPath = path.resolve(import.meta.dirname, "../dist/public");
 
-// 1. API routes first
+// ─── SECURITY MIDDLEWARE ───
+
+// 1. Security headers (Helmet-like)
+app.use("*", async (c, next) => {
+  c.header("X-Content-Type-Options", "nosniff");
+  c.header("X-Frame-Options", "DENY");
+  c.header("X-XSS-Protection", "1; mode=block");
+  c.header("Referrer-Policy", "strict-origin-when-cross-origin");
+  c.header("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  if (process.env.NODE_ENV === "production") {
+    c.header("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
+  }
+  await next();
+});
+
+// 2. CORS — whitelist only the deployed domain and localhost
+app.use("*", async (c, next) => {
+  const origin = c.req.header("origin") || "";
+  const allowedOrigins = [
+    "https://project-c-64qo.onrender.com",
+    "http://localhost:5173",
+    "http://localhost:3000",
+  ];
+  const isAllowed = allowedOrigins.includes(origin) || !origin;
+
+  if (c.req.method === "OPTIONS") {
+    c.header("Access-Control-Allow-Origin", isAllowed ? origin : allowedOrigins[0]);
+    c.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    c.header("Access-Control-Allow-Headers", "Content-Type, x-api-key");
+    c.header("Access-Control-Allow-Credentials", "true");
+    c.header("Access-Control-Max-Age", "86400");
+    return c.text("", 204);
+  }
+
+  c.header("Access-Control-Allow-Origin", isAllowed ? origin : allowedOrigins[0]);
+  c.header("Access-Control-Allow-Credentials", "true");
+  await next();
+});
+
+// 3. Simple rate limiting (in-memory, per IP)
+const rateMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_WINDOW_MS = 60_000; // 1 minute
+const RATE_MAX = 120; // 120 requests per minute
+
+app.use("/api/*", async (c, next) => {
+  const ip = c.req.header("x-forwarded-for") || "unknown";
+  const now = Date.now();
+  const entry = rateMap.get(ip);
+
+  if (!entry || now > entry.resetAt) {
+    rateMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
+  } else {
+    entry.count++;
+    if (entry.count > RATE_MAX) {
+      return c.json({ error: "Rate limit exceeded. Try again in a minute." }, 429);
+    }
+  }
+  await next();
+});
+
+// 4. API Key Authentication for tRPC endpoints
+app.use("/api/trpc/*", async (c, next) => {
+  // Skip auth for health check
+  if (c.req.url.endsWith("/ping")) {
+    await next();
+    return;
+  }
+
+  // In development, skip auth
+  if (process.env.NODE_ENV !== "production") {
+    await next();
+    return;
+  }
+
+  const apiKey = c.req.header("x-api-key");
+  const appSecret = process.env.APP_SECRET;
+
+  // If APP_SECRET is not set, allow (migration period)
+  if (!appSecret) {
+    await next();
+    return;
+  }
+
+  if (!apiKey || apiKey !== appSecret) {
+    return c.json({ error: "Unauthorized. Set x-api-key header matching APP_SECRET env var." }, 401);
+  }
+
+  await next();
+});
+
+// 5. Body limit + tRPC handler
 app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 app.use("/api/trpc/*", async (c) => {
   return fetchRequestHandler({
@@ -25,10 +115,10 @@ app.use("/api/trpc/*", async (c) => {
 });
 app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
 
-// 2. Static files with absolute path
+// 6. Static files with absolute path
 app.use("/*", serveStatic({ root: distPath }));
 
-// 3. SPA fallback — only for non-file requests
+// 7. SPA fallback — only for non-file requests
 app.all("*", (c) => {
   const url = new URL(c.req.url);
   const pathname = url.pathname;
