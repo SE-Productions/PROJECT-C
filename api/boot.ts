@@ -13,6 +13,60 @@ import { syncSchema } from "./lib/schema-sync";
 const app = new Hono<{ Bindings: HttpBindings }>();
 const distPath = path.resolve(import.meta.dirname, "../dist/public");
 
+// ═══ PUBLIC HEALTH ENDPOINT (no auth, no batch) ═══
+app.get("/api/health/keys", async (c) => {
+  const results: Array<{ name: string; envKey: string; healthy: boolean; detail?: string }> = [];
+
+  // A2E
+  try {
+    const { isA2eHealthy } = await import("./lib/a2e");
+    const ok = await isA2eHealthy();
+    results.push({ name: "A2E Media", envKey: "A2E_API_KEY", healthy: ok, detail: ok ? "API responsive" : "Unreachable" });
+  } catch { results.push({ name: "A2E Media", envKey: "A2E_API_KEY", healthy: false, detail: "Not set" }); }
+
+  // Gemini
+  try {
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) throw new Error("Not set");
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}&pageSize=1`, { signal: AbortSignal.timeout(8000) });
+    results.push({ name: "Gemini AI", envKey: "GEMINI_API_KEY", healthy: resp.ok, detail: resp.ok ? "Models accessible" : `HTTP ${resp.status}` });
+  } catch (e: any) { results.push({ name: "Gemini AI", envKey: "GEMINI_API_KEY", healthy: false, detail: e.message }); }
+
+  // NVIDIA
+  try {
+    const key = process.env.NVIDIA_API_KEY;
+    if (!key) throw new Error("Not set");
+    const resp = await fetch("https://api.nvcf.nvidia.com/v2/nvcf/authorizations/functions", { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(8000) });
+    results.push({ name: "NVIDIA", envKey: "NVIDIA_API_KEY", healthy: resp.ok || resp.status === 403, detail: resp.ok ? "OK" : resp.status === 403 ? "Key valid" : `HTTP ${resp.status}` });
+  } catch (e: any) { results.push({ name: "NVIDIA", envKey: "NVIDIA_API_KEY", healthy: false, detail: e.message }); }
+
+  // Firecrawl
+  try {
+    const key = process.env.FIRECRAWL_API_KEY;
+    if (!key) throw new Error("Not set");
+    const resp = await fetch("https://api.firecrawl.dev/v1/scrape", { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body: JSON.stringify({ url: "https://example.com" }), signal: AbortSignal.timeout(8000) });
+    results.push({ name: "Firecrawl", envKey: "FIRECRAWL_API_KEY", healthy: resp.ok || resp.status === 400, detail: resp.ok ? "OK" : resp.status === 400 ? "Key valid" : `HTTP ${resp.status}` });
+  } catch (e: any) { results.push({ name: "Firecrawl", envKey: "FIRECRAWL_API_KEY", healthy: false, detail: e.message }); }
+
+  // Composio
+  try {
+    const key = process.env.COMPOSIO_API_KEY;
+    if (!key) throw new Error("Not set");
+    const resp = await fetch("https://backend.composio.dev/api/v1/actions", { headers: { "x-api-key": key }, signal: AbortSignal.timeout(8000) });
+    results.push({ name: "Composio", envKey: "COMPOSIO_API_KEY", healthy: resp.ok, detail: resp.ok ? "OK" : `HTTP ${resp.status}` });
+  } catch (e: any) { results.push({ name: "Composio", envKey: "COMPOSIO_API_KEY", healthy: false, detail: e.message }); }
+
+  // Steel
+  try {
+    const key = process.env.STEEL_API_KEY;
+    if (!key) throw new Error("Not set");
+    const resp = await fetch("https://api.steel.dev/v1/sessions", { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(8000) });
+    results.push({ name: "Steel", envKey: "STEEL_API_KEY", healthy: resp.ok, detail: resp.ok ? "API accessible" : `HTTP ${resp.status}` });
+  } catch (e: any) { results.push({ name: "Steel", envKey: "STEEL_API_KEY", healthy: false, detail: e.message }); }
+
+  return c.json(results);
+});
+
 // ═══ TEMPORARY: Render API proxy (removes after env setup) ═══
 // This endpoint proxies requests to Render's API from within Render's network.
 // It auto-configures all environment variables on first boot if RENDER_API_KEY is set.
@@ -166,8 +220,8 @@ app.use("/api/*", async (c, next) => {
 
 // 4. API Key Authentication for tRPC endpoints
 app.use("/api/trpc/*", async (c, next) => {
-  // Skip auth for health checks (these are safe, read-only, no sensitive data)
-  if (c.req.url.endsWith("/ping") || c.req.url.endsWith("/health.checkKeys")) {
+  // Skip auth for ping (needed for Render health checks)
+  if (c.req.url.endsWith("/ping")) {
     await next();
     return;
   }

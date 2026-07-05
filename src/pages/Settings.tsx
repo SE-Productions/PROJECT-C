@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { trpc } from "@/providers/trpc";
 import ComposioDropdown from "@/components/ComposioDropdown";
 import PageHero from "@/components/PageHero";
 
@@ -35,14 +34,37 @@ const COLOR_MAP: Record<string, string> = {
   Steel: "text-cyan-500",
 };
 
+interface KeyHealth {
+  name: string;
+  envKey: string;
+  healthy: boolean;
+  detail?: string;
+}
+
 export default function SettingsPage() {
   const [appSecret, setAppSecret] = useState("");
   const [authStatus, setAuthStatus] = useState<"unconfigured" | "configured">("unconfigured");
+  const [keyHealth, setKeyHealth] = useState<KeyHealth[]>([]);
+  const [healthLoading, setHealthLoading] = useState(true);
 
-  const { data: keyHealth, isLoading: healthLoading } = trpc.health.checkKeys.useQuery(
-    undefined,
-    { refetchInterval: 30000, retry: 1 }
-  );
+  useEffect(() => {
+    let cancelled = false;
+    async function check() {
+      try {
+        const resp = await fetch("/api/health/keys");
+        if (!resp.ok) throw new Error("Health check failed");
+        const data = await resp.json();
+        if (!cancelled) setKeyHealth(data);
+      } catch {
+        if (!cancelled) setKeyHealth([]);
+      } finally {
+        if (!cancelled) setHealthLoading(false);
+      }
+    }
+    check();
+    const iv = setInterval(check, 30000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, []);
 
   useEffect(() => {
     const stored = localStorage.getItem("aura_api_key");
