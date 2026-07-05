@@ -98,12 +98,12 @@ export const generateRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
 
-      // Save initial record
+      // Save initial record with placeholder URL (non-empty to satisfy NOT NULL)
       const result = await db.insert(mediaAssets).values({
         bookId: input.bookId ?? null,
         type: "image",
         prompt: input.prompt,
-        url: "",
+        url: "pending",
         status: "generating",
         platform: input.platform ?? null,
       });
@@ -136,13 +136,13 @@ export const generateRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
 
-      // Save initial record
+      // Save initial record with placeholder URLs (non-empty to satisfy NOT NULL)
       const result = await db.insert(mediaAssets).values({
         bookId: input.bookId ?? null,
         type: "video",
         prompt: input.prompt,
-        url: "",
-        thumbnailUrl: "",
+        url: "pending",
+        thumbnailUrl: "pending",
         status: "generating",
         platform: input.platform ?? null,
       });
