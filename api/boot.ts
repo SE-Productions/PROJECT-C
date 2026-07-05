@@ -8,6 +8,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import fs from "fs";
 import path from "path";
 import { loadSkillsToRagLibrary } from "./skills/loader";
+import { syncSchema } from "./lib/schema-sync";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 const distPath = path.resolve(import.meta.dirname, "../dist/public");
@@ -56,8 +57,15 @@ if (process.env.NODE_ENV === "production" || process.env.PORT) {
     fetch: app.fetch,
     port,
     hostname: "0.0.0.0",
-  }, () => {
+  }, async () => {
     console.log(`Server running on http://0.0.0.0:${port}/`);
+    // Sync database schema on boot (creates tables if missing)
+    try {
+      await syncSchema();
+      console.log("[Boot] Schema sync complete");
+    } catch (err: any) {
+      console.error("[Boot] Schema sync failed:", err.message);
+    }
     // Load skills into RAG library on boot
     loadSkillsToRagLibrary().catch((err) =>
       console.error("[Boot] Skill loader failed:", err.message)
