@@ -1,17 +1,21 @@
 // Schema Sync — Automatically creates tables on boot if they don't exist
-// This ensures the deployed database always matches the code schema
-import { getDb } from "../queries/connection";
+// Uses raw mysql2 driver for CREATE TABLE operations (more reliable than Drizzle execute)
+import { createConnection } from "mysql2/promise";
 
-/**
- * Check if a table exists in the database.
- */
-async function tableExists(tableName: string): Promise<boolean> {
-  const db = getDb();
+const DATABASE_URL = process.env.DATABASE_URL;
+
+async function getRawConnection() {
+  if (!DATABASE_URL) throw new Error("DATABASE_URL not set");
+  return createConnection(DATABASE_URL);
+}
+
+async function tableExists(conn: any, tableName: string): Promise<boolean> {
   try {
-    const result = await db.execute(
-      `SELECT 1 FROM ${tableName} LIMIT 1`
+    const [rows] = await conn.execute(
+      "SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?",
+      [tableName]
     );
-    return true;
+    return Array.isArray(rows) && rows.length > 0;
   } catch {
     return false;
   }
@@ -19,16 +23,29 @@ async function tableExists(tableName: string): Promise<boolean> {
 
 /**
  * Sync database schema — create tables if they don't exist.
- * Runs automatically on server boot.
+ * Runs BEFORE server starts accepting requests (blocking boot).
  */
 export async function syncSchema(): Promise<void> {
-  const db = getDb();
+  if (!DATABASE_URL) {
+    console.warn("[SchemaSync] DATABASE_URL not set, skipping");
+    return;
+  }
+
+  let conn;
+  try {
+    conn = await getRawConnection();
+    console.log("[SchemaSync] Connected to database");
+  } catch (err: any) {
+    console.error("[SchemaSync] Failed to connect:", err.message);
+    return;
+  }
+
   const created: string[] = [];
   const existing: string[] = [];
 
-  // Check and create books table
-  if (!(await tableExists("books"))) {
-    await db.execute(`
+  // ─── 1. books ───
+  if (!(await tableExists(conn, "books"))) {
+    await conn.execute(`
       CREATE TABLE IF NOT EXISTS books (
         id bigint unsigned NOT NULL AUTO_INCREMENT PRIMARY KEY,
         title varchar(255) NOT NULL,
@@ -44,13 +61,11 @@ export async function syncSchema(): Promise<void> {
       )
     `);
     created.push("books");
-  } else {
-    existing.push("books");
-  }
+  } else { existing.push("books"); }
 
-  // Check and create campaigns table
-  if (!(await tableExists("campaigns"))) {
-    await db.execute(`
+  // ─── 2. campaigns ───
+  if (!(await tableExists(conn, "campaigns"))) {
+    await conn.execute(`
       CREATE TABLE IF NOT EXISTS campaigns (
         id bigint unsigned NOT NULL AUTO_INCREMENT PRIMARY KEY,
         book_id bigint unsigned,
@@ -65,13 +80,11 @@ export async function syncSchema(): Promise<void> {
       )
     `);
     created.push("campaigns");
-  } else {
-    existing.push("campaigns");
-  }
+  } else { existing.push("campaigns"); }
 
-  // Check and create posts table
-  if (!(await tableExists("posts"))) {
-    await db.execute(`
+  // ─── 3. posts ───
+  if (!(await tableExists(conn, "posts"))) {
+    await conn.execute(`
       CREATE TABLE IF NOT EXISTS posts (
         id bigint unsigned NOT NULL AUTO_INCREMENT PRIMARY KEY,
         book_id bigint unsigned,
@@ -87,20 +100,18 @@ export async function syncSchema(): Promise<void> {
       )
     `);
     created.push("posts");
-  } else {
-    existing.push("posts");
-  }
+  } else { existing.push("posts"); }
 
-  // Check and create media_assets table
-  if (!(await tableExists("media_assets"))) {
-    await db.execute(`
+  // ─── 4. media_assets ───
+  if (!(await tableExists(conn, "media_assets"))) {
+    await conn.execute(`
       CREATE TABLE IF NOT EXISTS media_assets (
         id bigint unsigned NOT NULL AUTO_INCREMENT PRIMARY KEY,
         book_id bigint unsigned,
         campaign_id bigint unsigned,
         type varchar(50) NOT NULL,
         prompt text,
-        url varchar(1000) NOT NULL DEFAULT '',
+        url varchar(1000) NOT NULL DEFAULT 'pending',
         thumbnail_url varchar(1000),
         platform varchar(100),
         status varchar(50) DEFAULT 'generating',
@@ -109,13 +120,11 @@ export async function syncSchema(): Promise<void> {
       )
     `);
     created.push("media_assets");
-  } else {
-    existing.push("media_assets");
-  }
+  } else { existing.push("media_assets"); }
 
-  // Check and create agent_messages table
-  if (!(await tableExists("agent_messages"))) {
-    await db.execute(`
+  // ─── 5. agent_messages ───
+  if (!(await tableExists(conn, "agent_messages"))) {
+    await conn.execute(`
       CREATE TABLE IF NOT EXISTS agent_messages (
         id bigint unsigned NOT NULL AUTO_INCREMENT PRIMARY KEY,
         agent_type enum('planner','search','media','social') NOT NULL,
@@ -127,13 +136,11 @@ export async function syncSchema(): Promise<void> {
       )
     `);
     created.push("agent_messages");
-  } else {
-    existing.push("agent_messages");
-  }
+  } else { existing.push("agent_messages"); }
 
-  // Check and create agent_tasks table
-  if (!(await tableExists("agent_tasks"))) {
-    await db.execute(`
+  // ─── 6. agent_tasks ───
+  if (!(await tableExists(conn, "agent_tasks"))) {
+    await conn.execute(`
       CREATE TABLE IF NOT EXISTS agent_tasks (
         id bigint unsigned NOT NULL AUTO_INCREMENT PRIMARY KEY,
         agent_type enum('planner','search','media','social') NOT NULL,
@@ -148,13 +155,11 @@ export async function syncSchema(): Promise<void> {
       )
     `);
     created.push("agent_tasks");
-  } else {
-    existing.push("agent_tasks");
-  }
+  } else { existing.push("agent_tasks"); }
 
-  // Check and create cron_jobs table
-  if (!(await tableExists("cron_jobs"))) {
-    await db.execute(`
+  // ─── 7. cron_jobs ───
+  if (!(await tableExists(conn, "cron_jobs"))) {
+    await conn.execute(`
       CREATE TABLE IF NOT EXISTS cron_jobs (
         id bigint unsigned NOT NULL AUTO_INCREMENT PRIMARY KEY,
         name varchar(255) NOT NULL,
@@ -169,16 +174,14 @@ export async function syncSchema(): Promise<void> {
       )
     `);
     created.push("cron_jobs");
-  } else {
-    existing.push("cron_jobs");
-  }
+  } else { existing.push("cron_jobs"); }
 
-  // Check and create scratch_pad table
-  if (!(await tableExists("scratch_pad"))) {
-    await db.execute(`
+  // ─── 8. scratch_pad ───
+  if (!(await tableExists(conn, "scratch_pad"))) {
+    await conn.execute(`
       CREATE TABLE IF NOT EXISTS scratch_pad (
         id bigint unsigned NOT NULL AUTO_INCREMENT PRIMARY KEY,
-        ${'`'}key${'`'} varchar(255) NOT NULL,
+        \`key\` varchar(255) NOT NULL,
         value text NOT NULL,
         category varchar(100) DEFAULT 'general',
         tags text,
@@ -190,13 +193,11 @@ export async function syncSchema(): Promise<void> {
       )
     `);
     created.push("scratch_pad");
-  } else {
-    existing.push("scratch_pad");
-  }
+  } else { existing.push("scratch_pad"); }
 
-  // Check and create agent_scratch_pad table
-  if (!(await tableExists("agent_scratch_pad"))) {
-    await db.execute(`
+  // ─── 9. agent_scratch_pad ───
+  if (!(await tableExists(conn, "agent_scratch_pad"))) {
+    await conn.execute(`
       CREATE TABLE IF NOT EXISTS agent_scratch_pad (
         id bigint unsigned NOT NULL AUTO_INCREMENT PRIMARY KEY,
         agent_type enum('planner','search','media','social') NOT NULL,
@@ -212,13 +213,11 @@ export async function syncSchema(): Promise<void> {
       )
     `);
     created.push("agent_scratch_pad");
-  } else {
-    existing.push("agent_scratch_pad");
-  }
+  } else { existing.push("agent_scratch_pad"); }
 
-  // Check and create reflection_log table
-  if (!(await tableExists("reflection_log"))) {
-    await db.execute(`
+  // ─── 10. reflection_log ───
+  if (!(await tableExists(conn, "reflection_log"))) {
+    await conn.execute(`
       CREATE TABLE IF NOT EXISTS reflection_log (
         id bigint unsigned NOT NULL AUTO_INCREMENT PRIMARY KEY,
         agent_type enum('planner','search','media','social') NOT NULL,
@@ -231,14 +230,17 @@ export async function syncSchema(): Promise<void> {
       )
     `);
     created.push("reflection_log");
-  } else {
-    existing.push("reflection_log");
-  }
+  } else { existing.push("reflection_log"); }
+
+  await conn.end();
 
   if (created.length > 0) {
-    console.log(`[SchemaSync] Created tables: ${created.join(", ")}`);
+    console.log(`[SchemaSync] Created ${created.length} tables: ${created.join(", ")}`);
   }
   if (existing.length > 0) {
-    console.log(`[SchemaSync] Existing tables: ${existing.join(", ")}`);
+    console.log(`[SchemaSync] ${existing.length} tables already exist: ${existing.join(", ")}`);
+  }
+  if (created.length === 0 && existing.length === 0) {
+    console.log("[SchemaSync] No tables to create (connection may have failed)");
   }
 }

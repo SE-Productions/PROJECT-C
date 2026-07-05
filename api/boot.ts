@@ -49,27 +49,39 @@ app.all("*", (c) => {
 
 export default app;
 
-// Start server
-if (process.env.NODE_ENV === "production" || process.env.PORT) {
+// ─── BLOCKING BOOT SEQUENCE ───
+// Server does NOT start until schema sync completes.
+// This prevents "Failed query: select ... from books" errors.
+async function boot() {
   const { serve } = await import("@hono/node-server");
   const port = parseInt(process.env.PORT || "10000");
+
+  // Step 1: Sync database schema BEFORE starting server
+  console.log("[Boot] Syncing database schema...");
+  try {
+    await syncSchema();
+    console.log("[Boot] Schema sync complete");
+  } catch (err: any) {
+    console.error("[Boot] Schema sync failed:", err.message);
+    // Continue anyway — server can still serve frontend
+  }
+
+  // Step 2: Load skills into RAG library
+  loadSkillsToRagLibrary().catch((err) =>
+    console.error("[Boot] Skill loader failed:", err.message)
+  );
+
+  // Step 3: Start server (only after schema is ready)
   serve({
     fetch: app.fetch,
     port,
     hostname: "0.0.0.0",
-  }, async () => {
-    console.log(`Server running on http://0.0.0.0:${port}/`);
-    // Sync database schema on boot (creates tables if missing)
-    try {
-      await syncSchema();
-      console.log("[Boot] Schema sync complete");
-    } catch (err: any) {
-      console.error("[Boot] Schema sync failed:", err.message);
-    }
-    // Load skills into RAG library on boot
-    loadSkillsToRagLibrary().catch((err) =>
-      console.error("[Boot] Skill loader failed:", err.message)
-    );
+  }, () => {
+    console.log(`[Boot] Server running on http://0.0.0.0:${port}/`);
   });
 }
-// Deploy trigger 1783221821
+
+// Start boot sequence
+if (process.env.NODE_ENV === "production" || process.env.PORT) {
+  boot();
+}
