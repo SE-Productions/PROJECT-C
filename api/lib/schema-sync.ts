@@ -1,11 +1,51 @@
-// Schema Sync — Auto-creates tables on boot using mysql2 Pool (same driver as Drizzle)
-// Uses ssl={rejectUnauthorized:false} for Aiven MySQL compatibility
+// Schema Sync — Auto-creates tables on boot using mysql2 Pool
+// Parses DATABASE_URL manually to avoid mysql2 URI parsing issues
+// Uses explicit SSL config for Aiven MySQL compatibility
 import mysql from "mysql2/promise";
 
 const DATABASE_URL = process.env.DATABASE_URL;
 
+function parseDbUrl(url: string): {
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  database: string;
+} {
+  // mysql://user:password@host:port/database?options
+  const parsed = new URL(url);
+  return {
+    host: parsed.hostname,
+    port: parseInt(parsed.port || "3306"),
+    user: decodeURIComponent(parsed.username),
+    password: decodeURIComponent(parsed.password),
+    database: parsed.pathname.replace(/^\//, ""),
+  };
+}
+
 function getPool() {
   if (!DATABASE_URL) throw new Error("DATABASE_URL not set");
+
+  // In production (Render), check if DATABASE_URL is actually a URI or raw params
+  if (DATABASE_URL.startsWith("mysql://")) {
+    const cfg = parseDbUrl(DATABASE_URL);
+    console.log(`[SchemaSync] Connecting to ${cfg.host}:${cfg.port}/${cfg.database}`);
+    return mysql.createPool({
+      host: cfg.host,
+      port: cfg.port,
+      user: cfg.user,
+      password: cfg.password,
+      database: cfg.database,
+      ssl: { rejectUnauthorized: false },
+      waitForConnections: true,
+      connectionLimit: 1,
+      queueLimit: 0,
+      // Aiven sometimes needs these for compatibility
+      enableKeepAlive: true,
+    });
+  }
+
+  // Fallback: try uri mode for local dev
   return mysql.createPool({
     uri: DATABASE_URL,
     ssl: { rejectUnauthorized: false },
@@ -52,9 +92,16 @@ export async function syncSchema(): Promise<void> {
   let pool: mysql.Pool | null = null;
   try {
     pool = getPool();
-    console.log("[SchemaSync] Connected to database");
+    // Test connection with a ping
+    const conn = await pool.getConnection();
+    await conn.ping();
+    conn.release();
+    console.log("[SchemaSync] Database connection verified");
   } catch (err: any) {
     console.error("[SchemaSync] Failed to connect:", err.message);
+    if (pool) {
+      try { await pool.end(); } catch {}
+    }
     return;
   }
 
