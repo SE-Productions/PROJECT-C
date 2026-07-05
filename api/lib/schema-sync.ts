@@ -1,16 +1,40 @@
 // Schema Sync — Auto-creates tables on boot using Drizzle's own mysql2 pool
 // Uses db.$client.promise() to get promise-based execution
-// This avoids DNS resolution issues since Drizzle's pool is already proven working
+// Includes retry logic for flaky DNS resolution on Render free tier
 
 import { getDb } from "../queries/connection";
 
+const MAX_RETRIES = 5;
+const RETRY_DELAY_MS = 2000;
+
+async function withRetry<T>(fn: () => Promise<T>, operation: string): Promise<T> {
+  let lastError: any;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastError = err;
+      const isDnsError = err.message?.includes("getaddrinfo") || err.message?.includes("ENOTFOUND");
+      if (isDnsError && attempt < MAX_RETRIES) {
+        console.log(`[SchemaSync] ${operation} failed (DNS, attempt ${attempt}/${MAX_RETRIES}), retrying in ${RETRY_DELAY_MS}ms...`);
+        await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastError;
+}
+
 async function tableExists(db: any, tableName: string): Promise<boolean> {
   try {
-    // $client is callback-based pool, need .promise() for async/await
     const client = db.$client.promise ? db.$client.promise() : db.$client;
-    const [rows] = await client.execute(
-      "SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?",
-      [tableName]
+    const [rows] = await withRetry(
+      () => client.execute(
+        "SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?",
+        [tableName]
+      ),
+      `tableExists(${tableName})`
     );
     return Array.isArray(rows) && rows.length > 0;
   } catch (err: any) {
@@ -22,7 +46,10 @@ async function tableExists(db: any, tableName: string): Promise<boolean> {
 async function createTable(db: any, sql: string, tableName: string): Promise<boolean> {
   try {
     const client = db.$client.promise ? db.$client.promise() : db.$client;
-    await client.execute(sql);
+    await withRetry(
+      () => client.execute(sql),
+      `createTable(${tableName})`
+    );
     console.log(`[SchemaSync] Created table: ${tableName}`);
     return true;
   } catch (err: any) {
