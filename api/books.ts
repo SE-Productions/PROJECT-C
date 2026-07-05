@@ -1,17 +1,17 @@
 import { z } from "zod";
-import { createRouter, publicQuery } from "./middleware";
+import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { books } from "@db/schema";
 import { eq } from "drizzle-orm";
 import { getInsertId } from "./lib/db-utils";
 
 export const booksRouter = createRouter({
-  list: publicQuery.query(async () => {
+  list: authedQuery.query(async () => {
     const db = getDb();
     return db.select().from(books).orderBy(books.createdAt);
   }),
 
-  getById: publicQuery
+  getById: authedQuery
     .input(z.object({ id: z.number() }))
     .query(async ({ input }) => {
       const db = getDb();
@@ -19,7 +19,7 @@ export const booksRouter = createRouter({
       return result[0] ?? null;
     }),
 
-  create: publicQuery
+  create: authedQuery
     .input(z.object({
       title: z.string().min(1),
       author: z.string().min(1),
@@ -44,7 +44,7 @@ export const booksRouter = createRouter({
       return { id: Number(getInsertId(result)) };
     }),
 
-  update: publicQuery
+  update: authedQuery
     .input(z.object({
       id: z.number(),
       title: z.string().optional(),
@@ -67,7 +67,7 @@ export const booksRouter = createRouter({
       return { success: true };
     }),
 
-  delete: publicQuery
+  delete: authedQuery
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();

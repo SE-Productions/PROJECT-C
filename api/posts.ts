@@ -1,36 +1,36 @@
 import { z } from "zod";
-import { createRouter, publicQuery } from "./middleware";
+import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { posts } from "@db/schema";
 import { eq } from "drizzle-orm";
 import { getInsertId } from "./lib/db-utils";
 
 export const postsRouter = createRouter({
-  list: publicQuery.query(async () => {
+  list: authedQuery.query(async () => {
     const db = getDb();
     return db.select().from(posts).orderBy(posts.createdAt);
   }),
 
-  listByBook: publicQuery
+  listByBook: authedQuery
     .input(z.object({ bookId: z.number() }))
     .query(async ({ input }) => {
       const db = getDb();
       return db.select().from(posts).where(eq(posts.bookId, input.bookId));
     }),
 
-  listByCampaign: publicQuery
+  listByCampaign: authedQuery
     .input(z.object({ campaignId: z.number() }))
     .query(async ({ input }) => {
       const db = getDb();
       return db.select().from(posts).where(eq(posts.campaignId, input.campaignId));
     }),
 
-  listScheduled: publicQuery.query(async () => {
+  listScheduled: authedQuery.query(async () => {
     const db = getDb();
     return db.select().from(posts).where(eq(posts.status, "scheduled"));
   }),
 
-  create: publicQuery
+  create: authedQuery
     .input(z.object({
       bookId: z.number(),
       campaignId: z.number().optional(),
@@ -54,7 +54,7 @@ export const postsRouter = createRouter({
       return { id: Number(getInsertId(result)) };
     }),
 
-  update: publicQuery
+  update: authedQuery
     .input(z.object({
       id: z.number(),
       content: z.string().optional(),
@@ -75,7 +75,7 @@ export const postsRouter = createRouter({
       return { success: true };
     }),
 
-  delete: publicQuery
+  delete: authedQuery
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();

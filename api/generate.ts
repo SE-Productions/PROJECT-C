@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createRouter, publicQuery } from "./middleware";
+import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { mediaAssets } from "@db/schema";
 import { eq } from "drizzle-orm";
@@ -151,7 +151,7 @@ async function generateVideoNvidia(
 // ─── tRPC ROUTER ───
 
 export const generateRouter = createRouter({
-  image: publicQuery
+  image: authedQuery
     .input(
       z.object({
         prompt: z.string().min(1),
@@ -191,7 +191,7 @@ export const generateRouter = createRouter({
       }
     }),
 
-  video: publicQuery
+  video: authedQuery
     .input(
       z.object({
         prompt: z.string().min(1),

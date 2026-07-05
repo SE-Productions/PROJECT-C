@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createRouter, publicQuery } from "./middleware";
+import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { agentTasks, agentMessages, books } from "@db/schema";
 import { eq, desc } from "drizzle-orm";
@@ -27,19 +27,19 @@ Would you like me to dive deeper into any of these areas?`;
 
 export const agentsRouter = createRouter({
   // Agent Tasks
-  listTasks: publicQuery.query(async () => {
+  listTasks: authedQuery.query(async () => {
     const db = getDb();
     return db.select().from(agentTasks).orderBy(desc(agentTasks.createdAt));
   }),
 
-  listTasksByBook: publicQuery
+  listTasksByBook: authedQuery
     .input(z.object({ bookId: z.number() }))
     .query(async ({ input }) => {
       const db = getDb();
       return db.select().from(agentTasks).where(eq(agentTasks.bookId, input.bookId));
     }),
 
-  createTask: publicQuery
+  createTask: authedQuery
     .input(z.object({
       agentType: z.enum(["planner", "search", "media", "social"]),
       bookId: z.number().optional(),
@@ -60,7 +60,7 @@ export const agentsRouter = createRouter({
       return { id: Number(getInsertId(result)) };
     }),
 
-  updateTask: publicQuery
+  updateTask: authedQuery
     .input(z.object({
       id: z.number(),
       status: z.enum(["pending", "running", "completed", "failed"]).optional(),
@@ -78,7 +78,7 @@ export const agentsRouter = createRouter({
     }),
 
   // Agent Messages
-  listMessages: publicQuery
+  listMessages: authedQuery
     .input(z.object({ bookId: z.number().optional() }))
     .query(async ({ input }) => {
       const db = getDb();
@@ -90,7 +90,7 @@ export const agentsRouter = createRouter({
       return db.select().from(agentMessages).orderBy(agentMessages.createdAt);
     }),
 
-  sendMessage: publicQuery
+  sendMessage: authedQuery
     .input(z.object({
       agentType: z.enum(["planner", "search", "media", "social"]),
       bookId: z.number().optional(),
@@ -142,7 +142,7 @@ export const agentsRouter = createRouter({
     }),
 
   // Orchestrate multi-agent workflow
-  orchestrate: publicQuery
+  orchestrate: authedQuery
     .input(z.object({
       bookId: z.number(),
       goal: z.string(),

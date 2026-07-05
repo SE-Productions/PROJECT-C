@@ -1,24 +1,24 @@
 import { z } from "zod";
-import { createRouter, publicQuery } from "./middleware";
+import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { mediaAssets } from "@db/schema";
 import { eq } from "drizzle-orm";
 import { getInsertId } from "./lib/db-utils";
 
 export const mediaRouter = createRouter({
-  list: publicQuery.query(async () => {
+  list: authedQuery.query(async () => {
     const db = getDb();
     return db.select().from(mediaAssets).orderBy(mediaAssets.createdAt);
   }),
 
-  listByBook: publicQuery
+  listByBook: authedQuery
     .input(z.object({ bookId: z.number() }))
     .query(async ({ input }) => {
       const db = getDb();
       return db.select().from(mediaAssets).where(eq(mediaAssets.bookId, input.bookId));
     }),
 
-  create: publicQuery
+  create: authedQuery
     .input(z.object({
       bookId: z.number().optional(),
       campaignId: z.number().optional(),
@@ -44,7 +44,7 @@ export const mediaRouter = createRouter({
       return { id: Number(getInsertId(result)) };
     }),
 
-  update: publicQuery
+  update: authedQuery
     .input(z.object({
       id: z.number(),
       url: z.string().optional(),
@@ -57,7 +57,7 @@ export const mediaRouter = createRouter({
       return { success: true };
     }),
 
-  delete: publicQuery
+  delete: authedQuery
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();

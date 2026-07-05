@@ -218,37 +218,7 @@ app.use("/api/*", async (c, next) => {
   await next();
 });
 
-// 4. API Key Authentication for tRPC endpoints
-app.use("/api/trpc/*", async (c, next) => {
-  // Skip auth for ping (needed for Render health checks)
-  if (c.req.url.endsWith("/ping")) {
-    await next();
-    return;
-  }
-
-  // In development, skip auth
-  if (process.env.NODE_ENV !== "production") {
-    await next();
-    return;
-  }
-
-  const apiKey = c.req.header("x-api-key");
-  const appSecret = process.env.APP_SECRET;
-
-  // If APP_SECRET is not set, allow (migration period)
-  if (!appSecret) {
-    await next();
-    return;
-  }
-
-  if (!apiKey || apiKey !== appSecret) {
-    return c.json({ error: "Unauthorized. Set x-api-key header matching APP_SECRET env var." }, 401);
-  }
-
-  await next();
-});
-
-// 5. Body limit + tRPC handler
+// 4. Body limit + tRPC handler
 app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 app.use("/api/trpc/*", async (c) => {
   return fetchRequestHandler({

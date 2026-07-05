@@ -1,24 +1,24 @@
 import { z } from "zod";
-import { createRouter, publicQuery } from "./middleware";
+import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { campaigns } from "@db/schema";
 import { eq } from "drizzle-orm";
 import { getInsertId } from "./lib/db-utils";
 
 export const campaignsRouter = createRouter({
-  list: publicQuery.query(async () => {
+  list: authedQuery.query(async () => {
     const db = getDb();
     return db.select().from(campaigns).orderBy(campaigns.createdAt);
   }),
 
-  listByBook: publicQuery
+  listByBook: authedQuery
     .input(z.object({ bookId: z.number() }))
     .query(async ({ input }) => {
       const db = getDb();
       return db.select().from(campaigns).where(eq(campaigns.bookId, input.bookId));
     }),
 
-  create: publicQuery
+  create: authedQuery
     .input(z.object({
       bookId: z.number(),
       name: z.string().min(1),
@@ -43,7 +43,7 @@ export const campaignsRouter = createRouter({
       return { id: Number(getInsertId(result)) };
     }),
 
-  update: publicQuery
+  update: authedQuery
     .input(z.object({
       id: z.number(),
       name: z.string().optional(),
@@ -66,7 +66,7 @@ export const campaignsRouter = createRouter({
       return { success: true };
     }),
 
-  delete: publicQuery
+  delete: authedQuery
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();

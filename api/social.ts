@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createRouter, publicQuery } from "./middleware";
+import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { posts, agentTasks } from "@db/schema";
 import { eq } from "drizzle-orm";
@@ -30,7 +30,7 @@ async function callComposio(action: string, params: Record<string, any>) {
 }
 
 export const socialRouter = createRouter({
-  publish: publicQuery
+  publish: authedQuery
     .input(z.object({
       postId: z.number(),
     }))
@@ -128,7 +128,7 @@ export const socialRouter = createRouter({
       }
     }),
 
-  schedule: publicQuery
+  schedule: authedQuery
     .input(z.object({
       postId: z.number(),
       scheduledAt: z.string(),
@@ -145,7 +145,7 @@ export const socialRouter = createRouter({
       return { success: true };
     }),
 
-  getStatus: publicQuery
+  getStatus: authedQuery
     .input(z.object({
       postId: z.number(),
     }))

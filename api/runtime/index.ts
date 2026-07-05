@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createRouter, publicQuery } from "../middleware";
+import { createRouter, authedQuery } from "./middleware";
 import { runHardenedAgentLoop } from "./hardened-loop";
 import { TOOL_REGISTRY } from "./tools";
 import { AGENT_PERSONAS } from "./agents";
@@ -13,20 +13,20 @@ import { getInsertId } from "../lib/db-utils";
 const agentTypeEnum = z.enum(["planner", "search", "media", "social"]);
 
 export const runtimeRouter = createRouter({
-  getPersonas: publicQuery.query(() =>
+  getPersonas: authedQuery.query(() =>
     Object.values(AGENT_PERSONAS).map((p) => ({
       name: p.name, type: p.type, description: p.description,
       tools: p.tools, maxIterations: p.maxIterations,
     }))
   ),
 
-  getTools: publicQuery.query(() =>
+  getTools: authedQuery.query(() =>
     Object.values(TOOL_REGISTRY).map((t) => ({
       name: t.name, description: t.description, parameters: t.parameters,
     }))
   ),
 
-  runAgent: publicQuery
+  runAgent: authedQuery
     .input(z.object({
       agentType: agentTypeEnum,
       message: z.string().min(1),
@@ -81,7 +81,7 @@ export const runtimeRouter = createRouter({
       }
     }),
 
-  getStats: publicQuery.query(async () => {
+  getStats: authedQuery.query(async () => {
     const tasks = await getDb().select().from(agentTasks);
     return {
       totalTasks: tasks.length,

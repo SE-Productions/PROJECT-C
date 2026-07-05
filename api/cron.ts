@@ -1,6 +1,6 @@
 // Cron Scheduler — Background scheduled agent tasks
 import { z } from "zod";
-import { createRouter, publicQuery } from "./middleware";
+import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { agentTasks, agentMessages } from "@db/schema";
 import { eq, sql } from "drizzle-orm";
@@ -46,7 +46,7 @@ async function executeCronJob(jobId: number, agentType: string, prompt: string, 
 }
 
 export const cronRouter = createRouter({
-  list: publicQuery.query(async () => {
+  list: authedQuery.query(async () => {
     try {
       const db = getDb();
       const result = await db.execute(sql`SELECT id, name, description, agent_type, book_id, prompt, schedule, last_run_at, next_run_at, run_count, status, created_at FROM cron_jobs ORDER BY created_at DESC`);
@@ -56,7 +56,7 @@ export const cronRouter = createRouter({
     }
   }),
 
-  create: publicQuery
+  create: authedQuery
     .input(z.object({
       name: z.string().min(1),
       description: z.string().optional(),
@@ -104,7 +104,7 @@ export const cronRouter = createRouter({
       }
     }),
 
-  toggle: publicQuery
+  toggle: authedQuery
     .input(z.object({ id: z.number(), status: z.enum(["active", "paused"]) }))
     .mutation(async ({ input }) => {
       const db = getDb();
@@ -116,7 +116,7 @@ export const cronRouter = createRouter({
       return { success: true };
     }),
 
-  delete: publicQuery
+  delete: authedQuery
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const interval = activeCronIntervals.get(input.id);
@@ -126,7 +126,7 @@ export const cronRouter = createRouter({
       return { success: true };
     }),
 
-  runNow: publicQuery
+  runNow: authedQuery
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();

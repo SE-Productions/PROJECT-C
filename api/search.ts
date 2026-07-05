@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { createRouter, publicQuery } from "./middleware";
+import { createRouter, authedQuery } from "./middleware";
 
 export const searchRouter = createRouter({
-  webSearch: publicQuery
+  webSearch: authedQuery
     .input(z.object({
       query: z.string().min(1),
     }))
@@ -40,7 +40,7 @@ export const searchRouter = createRouter({
       }
     }),
 
-  scrape: publicQuery
+  scrape: authedQuery
     .input(z.object({
       url: z.string().url(),
     }))

@@ -1,10 +1,10 @@
 // Crew Router — CrewAI-inspired multi-agent crew management
 import { z } from "zod";
-import { createRouter, publicQuery } from "./middleware";
+import { createRouter, authedQuery } from "./middleware";
 import { runCrew } from "./runtime/crew";
 
 export const crewRouter = createRouter({
-  runCrew: publicQuery
+  runCrew: authedQuery
     .input(z.object({
       goal: z.string().min(1),
       bookId: z.number().optional(),

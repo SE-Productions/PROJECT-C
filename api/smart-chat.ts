@@ -1,6 +1,6 @@
 // Smart Chat Router — Natural language → Intent → Confirmation → Execution
 import { z } from "zod";
-import { createRouter, publicQuery } from "./middleware";
+import { createRouter, authedQuery } from "./middleware";
 import { parseIntent } from "./intent";
 import { runAgentLoop } from "./runtime/agent-loop";
 import { runCrew } from "./runtime/crew";
@@ -11,7 +11,7 @@ import { getInsertId } from "./lib/db-utils";
 
 export const smartChatRouter = createRouter({
   // Step 1: Parse intent from natural language
-  parse: publicQuery
+  parse: authedQuery
     .input(z.object({ message: z.string().min(1) }))
     .mutation(async ({ input }) => {
       const db = getDb();
@@ -35,7 +35,7 @@ export const smartChatRouter = createRouter({
     }),
 
   // Step 2: Execute the parsed intent (after confirmation)
-  execute: publicQuery
+  execute: authedQuery
     .input(z.object({
       action: z.string(),
       agentType: z.enum(["planner", "search", "media", "social"]),
@@ -101,7 +101,7 @@ export const smartChatRouter = createRouter({
     }),
 
   // Execute crew from smart chat
-  executeCrew: publicQuery
+  executeCrew: authedQuery
     .input(z.object({
       goal: z.string().min(1),
       bookId: z.number().optional(),

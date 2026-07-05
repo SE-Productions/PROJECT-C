@@ -1,6 +1,6 @@
 // Scratch Pad Router — CRUD for global memory, agent thoughts, reflection logs, and skill library
 import { z } from "zod";
-import { createRouter, publicQuery } from "./middleware";
+import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { scratchPad, agentScratchPad, reflectionLog } from "@db/schema";
 import { eq, desc, like, or, and, count } from "drizzle-orm";
@@ -11,7 +11,7 @@ import { getInsertId } from "./lib/db-utils";
 export const scratchPadRouter = createRouter({
   // ─── GLOBAL SCRATCH PAD ───
 
-  list: publicQuery
+  list: authedQuery
     .input(z.object({
       category: z.string().optional(),
       bookId: z.number().optional(),
@@ -64,7 +64,7 @@ export const scratchPadRouter = createRouter({
       };
     }),
 
-  getById: publicQuery
+  getById: authedQuery
     .input(z.object({ id: z.number() }))
     .query(async ({ input }) => {
       const db = getDb();
@@ -78,7 +78,7 @@ export const scratchPadRouter = createRouter({
       };
     }),
 
-  create: publicQuery
+  create: authedQuery
     .input(z.object({
       key: z.string().min(1).max(255),
       value: z.string().min(1),
@@ -97,7 +97,7 @@ export const scratchPadRouter = createRouter({
       return { id: Number(getInsertId(result)) };
     }),
 
-  update: publicQuery
+  update: authedQuery
     .input(z.object({
       id: z.number(),
       key: z.string().min(1).max(255).optional(),
@@ -113,7 +113,7 @@ export const scratchPadRouter = createRouter({
       return { success: true };
     }),
 
-  delete: publicQuery
+  delete: authedQuery
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();
@@ -121,7 +121,7 @@ export const scratchPadRouter = createRouter({
       return { success: true };
     }),
 
-  search: publicQuery
+  search: authedQuery
     .input(z.object({ query: z.string().min(1), limit: z.number().min(1).max(20).default(10) }))
     .query(async ({ input }) => {
       const db = getDb();
@@ -146,7 +146,7 @@ export const scratchPadRouter = createRouter({
       }));
     }),
 
-  getCategories: publicQuery.query(async () => {
+  getCategories: authedQuery.query(async () => {
     const db = getDb();
     const results = await db.select({ category: scratchPad.category }).from(scratchPad);
     const cats = new Set(results.map((r) => r.category ?? "general"));
@@ -155,7 +155,7 @@ export const scratchPadRouter = createRouter({
 
   // ─── AGENT SCRATCH PAD (Thoughts) ───
 
-  listThoughts: publicQuery
+  listThoughts: authedQuery
     .input(z.object({
       taskId: z.number().optional(),
       agentType: z.enum(["planner", "search", "media", "social"]).optional(),
@@ -189,7 +189,7 @@ export const scratchPadRouter = createRouter({
 
   // ─── REFLECTION LOGS ───
 
-  listReflections: publicQuery
+  listReflections: authedQuery
     .input(z.object({
       taskId: z.number().optional(),
       agentType: z.enum(["planner", "search", "media", "social"]).optional(),
@@ -218,7 +218,7 @@ export const scratchPadRouter = createRouter({
       }));
     }),
 
-  getStats: publicQuery.query(async () => {
+  getStats: authedQuery.query(async () => {
     const db = getDb();
     const [memories] = await db.select({ count: count() }).from(scratchPad);
     const [thoughts] = await db.select({ count: count() }).from(agentScratchPad);
@@ -242,7 +242,7 @@ export const scratchPadRouter = createRouter({
 
   // ─── SKILL LIBRARY ───
 
-  listSkills: publicQuery
+  listSkills: authedQuery
     .input(z.object({
       category: z.string().optional(),
       agentType: z.enum(["planner", "search", "media", "social", "any"]).optional(),
@@ -268,7 +268,7 @@ export const scratchPadRouter = createRouter({
       }));
     }),
 
-  getSkill: publicQuery
+  getSkill: authedQuery
     .input(z.object({ id: z.string() }))
     .query(({ input }) => {
       const skill = SKILL_REGISTRY.find((s) => s.id === input.id);
@@ -276,7 +276,7 @@ export const scratchPadRouter = createRouter({
       return skill;
     }),
 
-  findSkills: publicQuery
+  findSkills: authedQuery
     .input(z.object({ query: z.string().min(1) }))
     .query(({ input }) => {
       return findSkillsByKeyword(input.query).map((s) => ({
@@ -288,14 +288,14 @@ export const scratchPadRouter = createRouter({
       }));
     }),
 
-  getSkillCategories: publicQuery.query(() => getAllCategories()),
+  getSkillCategories: authedQuery.query(() => getAllCategories()),
 
-  loadSkills: publicQuery.mutation(async () => {
+  loadSkills: authedQuery.mutation(async () => {
     const result = await loadSkillsToRagLibrary();
     return result;
   }),
 
-  reloadSkills: publicQuery.mutation(async () => {
+  reloadSkills: authedQuery.mutation(async () => {
     const result = await reloadSkills();
     return result;
   }),

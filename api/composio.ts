@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createRouter, publicQuery } from "./middleware";
+import { createRouter, authedQuery } from "./middleware";
 
 const COMPOSIO_API_KEY = process.env.COMPOSIO_API_KEY;
 const COMPOSIO_BASE = "https://backend.composio.dev/api/v2";
@@ -22,7 +22,7 @@ async function composioFetch(path: string, opts: RequestInit = {}) {
 
 export const composioRouter = createRouter({
   // List available apps from Composio
-  listApps: publicQuery.query(async () => {
+  listApps: authedQuery.query(async () => {
     if (!COMPOSIO_API_KEY) return { apps: [], error: "Composio API key not configured" };
     try {
       const data = await composioFetch("/apps?includeLocal=false") as any;
@@ -46,7 +46,7 @@ export const composioRouter = createRouter({
   }),
 
   // Get entity connections (which accounts are linked)
-  getConnections: publicQuery.query(async () => {
+  getConnections: authedQuery.query(async () => {
     if (!COMPOSIO_API_KEY) return { connections: [], error: "Composio API key not configured" };
     try {
       const data = await composioFetch("/entity/default/connections?showActiveOnly=true") as any;
@@ -65,7 +65,7 @@ export const composioRouter = createRouter({
   }),
 
   // Initiate OAuth connection
-  initiateConnection: publicQuery
+  initiateConnection: authedQuery
     .input(z.object({ appName: z.string() }))
     .mutation(async ({ input }) => {
       if (!COMPOSIO_API_KEY) throw new Error("Composio API key not configured");
@@ -83,7 +83,7 @@ export const composioRouter = createRouter({
     }),
 
   // List available actions for an app
-  listActions: publicQuery
+  listActions: authedQuery
     .input(z.object({ appName: z.string() }))
     .query(async ({ input }) => {
       if (!COMPOSIO_API_KEY) return { actions: [], error: "Composio API key not configured" };
@@ -103,7 +103,7 @@ export const composioRouter = createRouter({
     }),
 
   // Execute an action
-  executeAction: publicQuery
+  executeAction: authedQuery
     .input(z.object({
       actionName: z.string(),
       params: z.record(z.string(), z.any()),
